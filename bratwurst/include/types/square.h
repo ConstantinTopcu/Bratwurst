@@ -56,6 +56,13 @@ namespace Bratwurst
 	constexpr Square operator+(Square s, Direction d) noexcept { return static_cast<Square>(static_cast<int>(s) + static_cast<int>(d)); }
 	inline Square& operator+=(Square& s, Direction d) noexcept { return s = s + d; }
 
+	// Operator overload to allow addition for Rank and File enums
+	constexpr File operator+(File f, int offset) { return static_cast<File>(static_cast<int>(f) + offset); }
+	inline File& operator+=(File& f, int offset) { return f = f + offset; }
+	constexpr Rank operator+(Rank r, int offset) { return static_cast<Rank>(static_cast<int>(r) + offset); }
+	inline Rank& operator+=(Rank& r, int offset) { return r = r + offset; }
+
+
 	// Validation functions
 	constexpr bool isValid(Square s) noexcept
 	{
