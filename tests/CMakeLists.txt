@@ -9,6 +9,8 @@ FetchContent_MakeAvailable(catch2)
 
 add_executable(Tests
     "test_main.cpp"
+    "square_test.cpp"
+    "piece_test.cpp"
 )
 
 target_link_libraries(Tests PRIVATE BratwurstEngine Catch2::Catch2WithMain)

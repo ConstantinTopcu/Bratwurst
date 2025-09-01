@@ -32,10 +32,29 @@ namespace Bratwurst
 		NoneRank = 8, RankNum = 8
 	};
 
+	enum Direction : int8
+	{
+		Up = 8,
+		Down = -8,
+		Right = 1,
+		Left = -1,
+
+		UpRight = Up + Right,
+		UpLeft = Up + Left,
+		DownRight = Down + Right,
+		DownLeft = Down + Left
+	};
+
 	// Enable Incr/Decr operators
 	ENABLE_ENUM_ARITHMETIC(Square);
 	ENABLE_ENUM_ARITHMETIC(File);
 	ENABLE_ENUM_ARITHMETIC(Rank);
+
+	// Operator overloading to allow change of Square via applying a Direction using the + operator
+	constexpr Direction operator*(int factor, Direction dir) noexcept { return static_cast<Direction>(factor * static_cast<int>(dir)); }
+	inline Direction& operator*=(Direction& d, int factor) noexcept	{ return d = factor * d; }
+	constexpr Square operator+(Square s, Direction d) noexcept { return static_cast<Square>(static_cast<int>(s) + static_cast<int>(d)); }
+	inline Square& operator+=(Square& s, Direction d) noexcept { return s = s + d; }
 
 	// Validation functions
 	constexpr bool isValid(Square s) noexcept
