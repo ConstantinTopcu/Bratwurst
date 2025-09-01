@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core.h"
+#include "enum_ops.h"
 
 namespace Bratwurst
 {
@@ -30,6 +31,11 @@ namespace Bratwurst
 		Rank1, Rank2, Rank3, Rank4, Rank5, Rank6, Rank7, Rank8,
 		NoneRank = 8, RankNum = 8
 	};
+
+	// Enable Incr/Decr operators
+	ENABLE_ENUM_ARITHMETIC(Square);
+	ENABLE_ENUM_ARITHMETIC(File);
+	ENABLE_ENUM_ARITHMETIC(Rank);
 
 	// Validation functions
 	constexpr bool isValid(Square s) noexcept

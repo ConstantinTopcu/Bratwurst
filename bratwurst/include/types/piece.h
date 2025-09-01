@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core.h"
+#include "enum_ops.h"
 
 namespace Bratwurst
 {
@@ -25,6 +26,11 @@ namespace Bratwurst
 		White, Black,
 		NoneColor, ColorNum = 2
 	};
+
+	// Enable Incr/Decr operators
+	ENABLE_ENUM_ARITHMETIC(Piece);
+	ENABLE_ENUM_ARITHMETIC(PieceType);
+	ENABLE_ENUM_ARITHMETIC(Color);
 
 	// Validation functions
 	constexpr bool isValid(Piece p) noexcept
