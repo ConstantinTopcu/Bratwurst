@@ -120,3 +120,44 @@ TEST_CASE("Square + Direction operators")
         REQUIRE(static_cast<int>(s) == static_cast<int>(D4) + static_cast<int>(Direction::Up) + static_cast<int>(Direction::Right));
     }
 }
+
+TEST_CASE("String to Square conversion")
+{
+    SECTION("Valid square strings")
+    {
+        REQUIRE(stringToSquare("a1") == A1);
+        REQUIRE(stringToSquare("h8") == H8);
+        REQUIRE(stringToSquare("d4") == D4);
+        REQUIRE(stringToSquare("e5") == E5);
+    }
+    SECTION("Invalid square strings")
+    {
+        REQUIRE(stringToSquare("-") == NoneSquare);
+        REQUIRE(stringToSquare("") == NoneSquare);
+        REQUIRE(stringToSquare("i1") == NoneSquare);
+        REQUIRE(stringToSquare("a9") == NoneSquare);
+        REQUIRE(stringToSquare("abc") == NoneSquare);
+    }
+}
+
+TEST_CASE("Square to String conversion")
+{
+    SECTION("Valid squares")
+    {
+        REQUIRE(squareToString(A1) == "a1");
+        REQUIRE(squareToString(H8) == "h8");
+        REQUIRE(squareToString(D4) == "d4");
+        REQUIRE(squareToString(E5) == "e5");
+    }
+    SECTION("Invalid squares")
+    {
+        REQUIRE(squareToString(NoneSquare) == "-");
+    }
+    SECTION("Round-trip consistency")
+    {
+        REQUIRE(stringToSquare(squareToString(A1)) == A1);
+        REQUIRE(stringToSquare(squareToString(H8)) == H8);
+        REQUIRE(squareToString(stringToSquare("d4")) == "d4");
+        REQUIRE(squareToString(stringToSquare("e5")) == "e5");
+    }
+}

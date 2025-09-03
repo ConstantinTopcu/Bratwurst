@@ -98,4 +98,23 @@ namespace Bratwurst
 		return static_cast<Square>(f + r * FileNum);
 	}
 
+	inline Square stringToSquare(const std::string& s) noexcept
+	{
+		if (s == "-" || s.size() != 2) return NoneSquare;
+		if (s[0] < 'a' || s[0] > 'h') return NoneSquare;
+		if (s[1] < '1' || s[1] > '8') return NoneSquare;
+
+		File file = static_cast<File>(s[0] - 'a');
+		Rank rank = static_cast<Rank>(s[1] - '1');
+		return makeSquare(file, rank);
+	}
+
+	inline std::string squareToString(Square s) noexcept
+	{
+		if (!isValid(s)) return "-";
+		char fileChar = 'a' + static_cast<int>(fileOf(s));
+		char rankChar = '1' + static_cast<int>(rankOf(s));
+		return { fileChar, rankChar };
+	}
+
 }

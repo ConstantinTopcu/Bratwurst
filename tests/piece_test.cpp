@@ -65,3 +65,44 @@ TEST_CASE("Piece Make And Extract")
         }
     }
 }
+
+TEST_CASE("Piece conversion functions")
+{
+    SECTION("Invalid piece to char")
+    {
+        REQUIRE(pieceToChar(NonePiece) == '.');
+        REQUIRE(pieceToChar(static_cast<Piece>(99)) == '.');
+    }
+
+    SECTION("Invalid char to piece")
+    {
+        REQUIRE(charToPiece('.') == NonePiece);
+        REQUIRE(charToPiece('X') == NonePiece);
+        REQUIRE(charToPiece('1') == NonePiece);
+        REQUIRE(charToPiece(' ') == NonePiece);
+        REQUIRE(charToPiece('\0') == NonePiece);
+    }
+
+    SECTION("Round-trip consistency")
+    {
+        Piece pieces[] = {
+            WhitePawn, WhiteKnight, WhiteBishop, WhiteRook, WhiteQueen, WhiteKing,
+            BlackPawn, BlackKnight, BlackBishop, BlackRook, BlackQueen, BlackKing
+        };
+
+        for (Piece piece : pieces) {
+            char c = pieceToChar(piece);
+            REQUIRE(c != '.');
+            REQUIRE(charToPiece(c) == piece);
+        }
+    }
+
+    SECTION("Case sensitivity matters")
+    {
+        REQUIRE(pieceToChar(WhiteKing) != pieceToChar(BlackKing));
+        REQUIRE(charToPiece('K') != charToPiece('k'));
+
+        REQUIRE(pieceToChar(WhiteKing) == 'K');
+        REQUIRE(pieceToChar(BlackKing) == 'k');
+    }
+}

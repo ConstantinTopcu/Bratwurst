@@ -65,4 +65,48 @@ namespace Bratwurst
 		ASSERT(isValid(c) && isValid(pt));
 		return static_cast<Piece>(c * PieceTypeNum + pt);
 	}
+
+	constexpr char pieceToChar(Piece p) noexcept 
+	{ 
+		switch (p) 
+		{ 
+		case WhitePawn: return 'P'; 
+		case WhiteKnight: return 'N'; 
+		case WhiteBishop: return 'B'; 
+		case WhiteRook: return 'R'; 
+		case WhiteQueen: return 'Q';
+		case WhiteKing: return 'K'; 
+		
+		case BlackPawn: return 'p'; 
+		case BlackKnight: return 'n';
+		case BlackBishop: return 'b';
+		case BlackRook: return 'r'; 
+		case BlackQueen: return 'q';
+		case BlackKing: return 'k'; 
+		}
+		
+		return '.';
+	} 
+
+	constexpr Piece charToPiece(char p) noexcept 
+	{ 
+		switch (p)
+		{
+		case 'P': return WhitePawn;
+		case 'N': return WhiteKnight;
+		case 'B': return WhiteBishop;
+		case 'R': return WhiteRook;
+		case 'Q': return WhiteQueen;
+		case 'K': return WhiteKing;
+
+		case 'p': return BlackPawn;
+		case 'n': return BlackKnight;
+		case 'b': return BlackBishop;
+		case 'r': return BlackRook;
+		case 'q': return BlackQueen;
+		case 'k': return BlackKing;
+		}
+
+		return NonePiece;
+	}
 }
