@@ -109,4 +109,10 @@ namespace Bratwurst
 
 		return NonePiece;
 	}
+
+	constexpr Color operator~(Color c)
+	{
+		ASSERT(isValid(c));
+		return static_cast<Color>(c ^ 1);
+	}
 }

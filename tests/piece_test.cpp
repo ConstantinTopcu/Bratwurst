@@ -106,3 +106,9 @@ TEST_CASE("Piece conversion functions")
         REQUIRE(pieceToChar(BlackKing) == 'k');
     }
 }
+
+TEST_CASE("Opposite Color operator")
+{
+    REQUIRE(~White == Black);
+    REQUIRE(~Black == White);
+}
