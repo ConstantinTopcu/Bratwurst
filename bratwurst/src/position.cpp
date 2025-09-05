@@ -60,15 +60,7 @@ std::expected<Position, Position::FenError> Position::fromFEN(const std::string&
             // parse char into piece and place it on the current square
             Piece piece = charToPiece(c);
             if (!isValid(piece)) return std::unexpected(FenError::InvalidPiecePlacement);
-
-            Square currSquare = makeSquare(currFile, currRank);
-            Bitboard mask = squareMask(currSquare);
-
-            // place piece on board
-            pos.m_pieces[currSquare] = piece;
-            pos.m_colorBBs[colorOf(piece)] |= mask;
-            pos.m_typeBBs[pieceTypeOf(piece)] |= mask;
-
+            pos.placePiece(makeSquare(currFile, currRank), piece);
             currFile += Right;
         }
 

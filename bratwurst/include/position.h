@@ -83,6 +83,10 @@ namespace Bratwurst
 		inline Piece capturedPiece() const noexcept;
 		inline Move prevMove() const noexcept;
 
+		inline void movePiece(Square src, Square dst, Piece srcPiece) noexcept;
+		inline void placePiece(Square s, Piece piece) noexcept;
+		inline void removePiece(Square s, Piece piece) noexcept;
+
 	private:
 		// Use both Piece array and bitboards for pieceTypes and colors, since both have their own advantages:
 		// - The Piece array enables the fast retrieval of a piece on a given square.
@@ -183,5 +187,41 @@ namespace Bratwurst
 	{
 		ASSERT(!m_stateHistory.empty());
 		return stateInfo().prevMove;
+	}
+
+	inline void Position::movePiece(Square src, Square dst, Piece srcPiece) noexcept
+	{
+		ASSERT(isValid(src) && isValid(dst));
+		ASSERT(m_pieces[src] == srcPiece);
+		ASSERT(m_pieces[dst] == NonePiece);
+		ASSERT(isValid(srcPiece));
+
+		Bitboard moveMask = squareMask(src) | squareMask(dst);
+		m_colorBBs[colorOf(srcPiece)] ^= moveMask;
+		m_typeBBs[pieceTypeOf(srcPiece)] ^= moveMask;
+		m_pieces[src] = NonePiece;
+		m_pieces[dst] = srcPiece;
+	}
+
+	inline void Position::placePiece(Square s, Piece piece) noexcept
+	{
+		ASSERT(isValid(piece) && isValid(s));
+		ASSERT(m_pieces[s] == NonePiece);
+
+		Bitboard mask = squareMask(s);
+		m_colorBBs[colorOf(piece)] |= mask;
+		m_typeBBs[pieceTypeOf(piece)] |= mask;
+		m_pieces[s] = piece;
+	}
+
+	inline void Position::removePiece(Square s, Piece piece) noexcept
+	{
+		ASSERT(isValid(s) && isValid(piece));
+		ASSERT(m_pieces[s] == piece);
+
+		Bitboard mask = squareMask(s);
+		m_colorBBs[colorOf(piece)] ^= mask;
+		m_typeBBs[pieceTypeOf(piece)] ^= mask;
+		m_pieces[s] = NonePiece;
 	}
 }
