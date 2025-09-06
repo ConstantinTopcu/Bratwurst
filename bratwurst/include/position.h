@@ -59,6 +59,7 @@ namespace Bratwurst
 		inline ~Position() noexcept = default;
 
 		static std::expected<Position, FenError> fromFEN(const std::string& fen = std::string(StartPosFEN)) noexcept;
+		std::string fen() const noexcept;
 
 		// Getters for pieces
 		template<typename... PieceTypes>
@@ -107,7 +108,6 @@ namespace Bratwurst
 	inline Bitboard Position::typeBB(PieceTypes... types) const noexcept
 	{
 		static_assert((std::is_same_v<PieceTypes, PieceType> && ...), "All arguments must be of type PieceType");
-		(ASSERT(isValid(types)), ...);
 		return (m_typeBBs[types] | ...);
 	}
 

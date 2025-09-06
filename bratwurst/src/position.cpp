@@ -59,7 +59,7 @@ std::expected<Position, Position::FenError> Position::fromFEN(const std::string&
         {
             // parse char into piece and place it on the current square
             Piece piece = charToPiece(c);
-            if (!isValid(piece)) return std::unexpected(FenError::InvalidPiecePlacement);
+            if (!isValid(piece) || !isValid(currFile)) return std::unexpected(FenError::InvalidPiecePlacement);
             pos.placePiece(makeSquare(currFile, currRank), piece);
             currFile += Right;
         }
@@ -120,9 +120,61 @@ std::expected<Position, Position::FenError> Position::fromFEN(const std::string&
         return std::unexpected(FenError::InvalidFullMoveCounter); 
     }
 
-
-
     return pos;
+}
+
+std::string Position::fen() const noexcept
+{
+    std::string fen = "";
+
+    for (Rank r = Rank8; isValid(r); r--)
+    {
+        uint8 emptySquares = 0;
+
+        for (File f = FileA; isValid(f); f++)
+        {
+            Square s = makeSquare(f, r);
+            Piece piece = pieceOn(s);
+
+            if (piece == NonePiece)
+            {
+                emptySquares++;
+            }
+            else
+            {
+                if (emptySquares != 0)
+                {
+                    fen += (emptySquares + '0');
+                    emptySquares = 0;
+                }
+                fen += pieceToChar(piece);
+            }
+        }
+        
+        if (emptySquares != 0) fen += (emptySquares + '0');
+
+        if (r != Rank1) fen += '/';
+    }
+
+    fen += (m_colorToMove == White) ? " w" : " b";
+
+    fen += ' ';
+    const StateInfo& state = stateInfo();
+    if ((state.castlingRights >> CastlingRight::WhiteOO) & 1) fen += 'K';
+    if ((state.castlingRights >> CastlingRight::WhiteOOO) & 1) fen += 'Q';
+    if ((state.castlingRights >> CastlingRight::BlackOO) & 1) fen += 'k';
+    if ((state.castlingRights >> CastlingRight::BlackOOO) & 1) fen += 'q';
+    if (fen[fen.size() - 1] == ' ') fen += "-";
+
+    // en passant
+    fen += ' ';
+    fen += (state.enPassantSquare != NoneSquare) ? squareToString(state.enPassantSquare) : "-";
+
+    // halfmove and fullmove
+    fen += ' ' + std::to_string(state.halfMoveClock);
+    fen += ' ' + std::to_string(m_fullMoveCounter);
+
+    return fen;
 }
 
 }
