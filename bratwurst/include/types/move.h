@@ -4,6 +4,7 @@
 
 #include "types/square.h"
 #include "types/piece.h"
+#include "types/castling_right.h"
 
 namespace Bratwurst
 {
@@ -39,8 +40,7 @@ struct Move
 	constexpr bool enPassant() const noexcept { return flag() == Flag::EnPassant; }
 	
 	constexpr bool castling() const noexcept { return flag() & Flag::CastlingMask; }
-	constexpr bool castlingOO() const noexcept { return flag() == Flag::CastlingOO; }
-	constexpr bool castlingOOO() const noexcept { return flag() == Flag::CastlingOOO; }
+	constexpr CastlingSide castlingSide() const noexcept { return static_cast<CastlingSide>(flag() & 1); }
 	
 	constexpr bool promotion() const noexcept { return flag() & Flag::PromotionMask; }
 

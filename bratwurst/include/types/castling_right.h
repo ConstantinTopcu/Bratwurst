@@ -18,6 +18,7 @@ namespace Bratwurst
 	{
 		WhiteOO, WhiteOOO,
 		BlackOO, BlackOOO,
+		CastlingRightNone,
 		CastlingRightNum = 4
 	};
 
@@ -35,4 +36,21 @@ namespace Bratwurst
 		return static_cast<CastlingRight>(c * 2 + side);
 	}
 
+	constexpr CastlingRight castlingRightByRookSrc(Square s) noexcept
+	{
+		switch (s)
+		{
+		case(A1): return CastlingRight::WhiteOO;
+		case(H1): return CastlingRight::WhiteOOO;
+		case(A8): return CastlingRight::BlackOO;
+		case(H8): return CastlingRight::BlackOOO;
+		}
+
+		return CastlingRight::CastlingRightNone;
+	}
+
+	constexpr bool isValid(CastlingRight right) noexcept
+	{
+		return right < CastlingRightNone;
+	}
 }
