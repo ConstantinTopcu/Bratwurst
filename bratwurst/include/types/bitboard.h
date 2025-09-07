@@ -91,4 +91,23 @@ inline int popCnt(Bitboard mask) noexcept
 #endif
 }
 
+inline std::string toString(Bitboard b) noexcept
+{
+	std::string str;
+
+	for (Rank r = Rank1; isValid(r); r++)
+	{
+		for (File f = FileA; isValid(f); f++)
+		{
+			Square s = makeSquare(f, r);
+			str += (b >> s) & 1 ? 'X' : '.';
+			str += ' ';
+		}
+
+		str += '\n';
+	}
+
+	return str;
+}
+
 }
