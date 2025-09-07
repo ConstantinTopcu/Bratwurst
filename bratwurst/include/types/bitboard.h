@@ -95,7 +95,7 @@ inline std::string toString(Bitboard b) noexcept
 {
 	std::string str;
 
-	for (Rank r = Rank1; isValid(r); r++)
+	for (Rank r = Rank8; isValid(r); r--)
 	{
 		for (File f = FileA; isValid(f); f++)
 		{
