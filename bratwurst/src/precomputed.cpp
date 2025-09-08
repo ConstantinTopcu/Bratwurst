@@ -1,7 +1,7 @@
 #include "precomputed.h"
+#include "attacks.h"
 
 #include <atomic>
-#include <span>
 
 namespace Bratwurst::Precomputed
 {
@@ -21,40 +21,6 @@ constexpr int kingOffsets[8][2] = { {1, 1}, {1, -1}, {-1, 1}, {-1, -1}, {1, 0}, 
 constexpr int bishopDirections[4][2] = { {1, 1}, {1, -1}, {-1, 1}, {-1, -1} };
 constexpr int rookDirections[4][2] = { {1, 0}, {0, 1}, {-1, 0}, {0, -1} };
 constexpr int queenDirections[8][2] = { {1, 0}, {0, 1}, {-1, 0}, {0, -1}, {1, 1}, {1, -1}, {-1, 1}, {-1, -1} };
-
-// Computes attacks for a square in given directions.
-// Used only for precomputing attack tables (dynamic computation is slow).
-// 'sliding' controls whether the piece slides multiple squares.
-// 'excludeEdges' stops attacks one square before the board edge to help generate
-// the relevant-blockers mask for the Magic struct.
-template<bool sliding = false, bool excludeEdges = false>
-constexpr Bitboard dynamicAttacks(Square s, const std::span<const int[2]>& directions, Bitboard blockers = 0ULL) noexcept
-{
-	Bitboard attacks = 0ULL;
-
-	for (auto [dx, dy] : directions)
-	{
-		File f = fileOf(s) + dx;
-		Rank r = rankOf(s) + dy;
-
-		// stop one iteration early if excludeEdges is enabled
-		while (isValid(r + dy * excludeEdges) && isValid(f + dx * excludeEdges))
-		{
-			Square dst = makeSquare(f, r);
-			Bitboard mask = squareMask(dst);
-			attacks |= mask;
-
-			if constexpr (!sliding) break;
-
-			if (blockers & mask) break;
-
-			f += dx;
-			r += dy;
-		}
-	}
-
-	return attacks;
-}
 
 void init() noexcept
 {
