@@ -6,7 +6,7 @@
 #include "types/square.h"
 #include "types/piece.h"
 
-namespace Bratwurst
+namespace Bratwurst::Precomputed
 {
 
 // Stores precomputed attacks and hashing values for one given square.
@@ -27,7 +27,7 @@ struct Magic
 
 // magics for rook and bishop
 // use 'pieceType - Bishop' for first index
-extern Magic rookMagics[2][SquareNum];
+extern Magic magics[2][SquareNum];
 
 // Stores a bitboard of pseudo-attacks (ignoring blockers) for each piece on each square.
 // White and Black pawns have different attack patterns, so use WhitePawn and BlackPawn respectively.
