@@ -6,6 +6,8 @@
 #include "types/square.h"
 #include "types/piece.h"
 
+#include "precomputed.h"
+
 #include <span>
 
 namespace Bratwurst
@@ -41,8 +43,23 @@ constexpr Bitboard dynamicAttacks(Square s, const std::span<const int[2]>& direc
 			r += dy;
 		}
 	}
-
 	return attacks;
+}
+
+// Color irrelevant except for pawn attacks
+template<PieceType pt, Color c = White>
+inline Bitboard attacks(Square s, Bitboard blockers) noexcept
+{
+	ASSERT(isValid(s));
+
+	if constexpr (pt == Pawn && c == White) return Precomputed::pseudoAttacks[WhitePawn][s];
+	else if constexpr (pt == Pawn && c == Black) return Precomputed::pseudoAttacks[BlackPawn][s];
+	else if constexpr (pt == Knight) return Precomputed::pseudoAttacks[Knight][s];
+	else if constexpr (pt == Bishop) return Precomputed::magics[0][s].attacks(blockers);
+	else if constexpr (pt == Rook) return Precomputed::magics[1][s].attacks(blockers);
+	else if constexpr (pt == Queen) return (attacks<Bishop>(s, blockers) | attacks<Rook>(s, blockers));
+	else if constexpr (pt == King) return Precomputed::pseudoAttacks[King][s];
+	else static_assert(false, "Unsupported piece type in attacks()");
 }
 
 }

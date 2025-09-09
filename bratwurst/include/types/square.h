@@ -3,6 +3,8 @@
 #include "core.h"
 #include "enum_ops.h"
 
+#include <string>
+
 namespace Bratwurst
 {
 

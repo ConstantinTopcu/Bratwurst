@@ -1,0 +1,74 @@
+#pragma once
+
+#include "magic_gen.h"
+#include "precomputed.h"
+#include "attacks.h"
+
+#include <vector>
+
+// This File is not included in the build and is only for creating precomputed magic bitboards
+namespace Bratwurst::MagicGenerator
+{
+
+// this function uses a shift value of 64 - popCnt(relevantBlockerMask)
+Bitboard findMagicBitboard(Square s, std::span<const int[2]> directions, int maxTries)
+{
+	Bitboard blockerMask = dynamicAttacks<true, true>(s, directions);
+	int relevantBlockerCnt = popCnt(blockerMask);
+	int shift = 64 - relevantBlockerCnt;
+
+	size_t attacksCnt = 1ULL << relevantBlockerCnt;
+	using LookupEntry = std::pair<Bitboard, Bitboard>;
+	std::vector<LookupEntry> lookupTable(attacksCnt);
+
+	for (size_t i = 0; i < attacksCnt; i++)
+	{
+		Bitboard blockers = 0ULL;
+		Bitboard tempMask = blockerMask;
+		Bitboard tempIndex = i;
+
+		while (tempMask)
+		{
+			Square relevantSquare = popLsb(tempMask);
+			blockers |= ((tempIndex & 1ULL) << relevantSquare);
+			tempIndex >>= 1;
+		}
+
+		Bitboard attacks = dynamicAttacks<true>(s, directions, blockers);
+		lookupTable[i] = LookupEntry(blockers, attacks);
+	}
+
+	Bitboard* attackTable = new Bitboard[attacksCnt];
+
+	for (int i = 0; i < maxTries; i++)
+	{
+		Bitboard magic = randomBitboard() & randomBitboard() & randomBitboard();
+		std::memset(attackTable, 0ULL, sizeof(Bitboard) * attacksCnt);
+		bool collides = false;
+
+		for (const auto& [occupancy, attacks] : lookupTable)
+		{
+			size_t index = (occupancy * magic) >> shift;
+			Bitboard& slot = attackTable[index];
+			
+			if (slot != 0ULL && slot != attacks)
+			{
+				collides = true;
+				break;
+			}
+
+			slot = attacks;
+		}
+
+		if (!collides)
+		{
+			delete[] attackTable;
+			return magic;
+			break;
+		}
+	}
+
+	return 0ULL;
+}
+
+}

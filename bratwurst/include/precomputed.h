@@ -13,16 +13,24 @@ namespace Bratwurst::Precomputed
 // Used to speed up move/attack generation
 struct Magic
 {
-	Bitboard* attacks = nullptr;
+	Bitboard* attacksTable = nullptr;
 	uint8 shift = 64;
 	Bitboard mask = 0ULL;
 	Bitboard magic = 0ULL;
 
 	inline size_t index(Bitboard blockers) const noexcept
 	{
-		ASSERT(attacks != nullptr);
+		ASSERT(attacksTable != nullptr);
 		return ((blockers & mask) * magic) >> shift;
 	}
+
+	inline Bitboard attacks(Bitboard blockers) const noexcept
+	{
+		ASSERT(attacksTable != nullptr);
+		size_t i = index(blockers);
+		return attacksTable[i];
+	}
+
 };
 
 // magics for rook and bishop
