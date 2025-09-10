@@ -8,6 +8,9 @@
 #include "types/piece.h"
 #include "types/move.h"
 
+#include "attacks.h"
+#include "precomputed.h"
+
 #include <stack>
 #include <expected>
 #include <string_view>
@@ -28,6 +31,8 @@ struct StateInfo
 	Square enPassantSquare;
 	Piece capturedPiece;
 	Move prevMove;
+
+	Bitboard checkers;
 
 	constexpr bool hasCastlingRight(CastlingRight right) const noexcept
 	{
@@ -75,6 +80,11 @@ public:
 	inline Bitboard pieceBB(Color c, PieceType type) const noexcept;
 	inline Bitboard occupancyBB() const noexcept;
 	inline Piece pieceOn(Square s) const noexcept;
+	inline Square kingSquare(Color c) const noexcept;
+
+	inline Bitboard attackers(Square s, Color attackingColor) const noexcept;
+	inline void updateCheckers() noexcept;
+	inline Bitboard checkers() const noexcept;
 
 	inline Color colorToMove() const noexcept;
 	inline uint16 fullMovecounter() const noexcept;
@@ -139,6 +149,35 @@ inline Piece Position::pieceOn(Square s) const noexcept
 {
 	ASSERT(isValid(s));
 	return m_pieces[s];
+}
+
+inline Square Position::kingSquare(Color c) const noexcept
+{
+	return lsb(pieceBB(c, King));
+}
+
+inline Bitboard Position::attackers(Square s, Color attackingColor) const noexcept
+{
+	Bitboard attackers = 0ULL;
+	Bitboard blockers = occupancyBB();
+
+	attackers |= Precomputed::pseudoAttacks[makePiece(attackingColor, Pawn)][s] & pieceBB(attackingColor, Pawn);
+	attackers |= attacks<Knight>(s) & pieceBB(attackingColor, Knight);
+	attackers |= attacks<Bishop>(s, blockers) & (typeBB(Bishop, Queen) & colorBB(attackingColor));
+	attackers |= attacks<Rook>(s, blockers) & (typeBB(Rook, Queen) & colorBB(attackingColor));
+	attackers |= attacks<King>(s, blockers) & pieceBB(attackingColor, King);
+
+	return attackers;
+}
+
+inline void Position::updateCheckers() noexcept
+{
+	stateInfo().checkers = attackers(kingSquare(m_colorToMove), ~m_colorToMove);
+}
+
+inline Bitboard Position::checkers() const noexcept
+{
+	return stateInfo().checkers;
 }
 
 inline Color Position::colorToMove() const noexcept

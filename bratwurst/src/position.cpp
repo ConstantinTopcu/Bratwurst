@@ -68,6 +68,7 @@ std::expected<Position, Position::FenError> Position::fromFEN(const std::string&
         if (currFile > FileH + 1) return std::unexpected(FenError::InvalidPiecePlacement);
     }
 
+    if (popCnt(pos.pieceBB(White, King)) != 1 || popCnt(pos.pieceBB(Black, King)) != 1) return std::unexpected(FenError::InvalidPiecePlacement);
     if (currFile != (FileH + 1) || currRank != Rank1) return std::unexpected(FenError::InvalidPiecePlacement);
 
     // parse side to move ("w" = White, "b = Black)
@@ -119,6 +120,8 @@ std::expected<Position, Position::FenError> Position::fromFEN(const std::string&
     {
         return std::unexpected(FenError::InvalidFullMoveCounter);
     }
+
+    pos.updateCheckers();
 
     return pos;
 }

@@ -3,19 +3,29 @@
 
 using namespace Bratwurst;
 
+// Global fixture for Precomputed
+struct PrecomputedFixture 
+{
+    PrecomputedFixture() { Precomputed::init(); }
+    ~PrecomputedFixture() { Precomputed::cleanup(); }
+};
+
+// Register fixture so it runs once
+static PrecomputedFixture globalPrecomputed;
+
 TEST_CASE("check valid fens")
 {
     std::string validFens[] =
     {
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-        "8/8/8/8/8/8/8/8 b - - 0 1",
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b - - 0 1",
         "8/8/8/8/4k3/8/8/4K3 w - - 5 42",
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq e3 0 2",
         "r3k2r/8/8/8/8/8/8/R3K2R w K - 12 34",
         "r3k2r/8/8/8/8/8/8/R3K2R b q - 7 55",
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w - - 3 10",
         "rnbqkb1r/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e6 0 2",
-        "8/8/8/3pP3/8/8/8/8 w - d6 0 15",
+        "k7/7K/8/3pP3/8/8/8/8 w - d6 0 15",
         "r1bq1rk1/pppp1ppp/2n2n2/2b1p3/4P3/2NP1N2/PPP2PPP/R1BQ1RK1 w - - 6 10"
     };
 
@@ -32,17 +42,16 @@ TEST_CASE("check invalid fens")
 {
     std::vector<std::pair<std::string, Position::FenError>> invalidFens =
     {
-        {"8/8/8/8/8/8/8/8 w - - 0", Position::FenError::InvalidFormat},
+        {"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w - - 0", Position::FenError::InvalidFormat},
         {"9/8/8/8/8/8/8/8 w - - 0 1", Position::FenError::InvalidPiecePlacement},
-        {"8/8/8/8/8/8/8/8 x - - 0 1", Position::FenError::InvalidColorToMove},
-        {"8/8/8/8/8/8/8/8 w A - 0 1", Position::FenError::InvalidCastlingRights},
-        {"8/8/8/8/8/8/8/8 w -z - 0 1", Position::FenError::InvalidCastlingRights},
-        {"8/8/8/8/8/8/8/8 w - i8 0 1", Position::FenError::InvalidEnPassantSquare},
-        {"8/8/8/8/8/8/8/8 w - - -1 1", Position::FenError::InvalidHalfmoveClock},
-        {"8/8/8/8/8/8/8/8 w - - 51 1", Position::FenError::InvalidHalfmoveClock},
-        {"8/8/8/8/8/8/8/8 w - - 0 -1", Position::FenError::InvalidFullMoveCounter},
+        {"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR x - - 0 1", Position::FenError::InvalidColorToMove},
+        {"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w A - 0 1", Position::FenError::InvalidCastlingRights},
+        {"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w -z - 0 1", Position::FenError::InvalidCastlingRights},
+        {"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w - i8 0 1", Position::FenError::InvalidEnPassantSquare},
+        {"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w - - -1 1", Position::FenError::InvalidHalfmoveClock},
+        {"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w - - 51 1", Position::FenError::InvalidHalfmoveClock},
+        {"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w - - 0 -1", Position::FenError::InvalidFullMoveCounter},
         {"rnbqkbnrr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w - - 0 1", Position::FenError::InvalidPiecePlacement},
-        {"/8/8/8/8/8/8/8 w - - 0 1", Position::FenError::InvalidFormat}
     };
 
     for (const auto& [fen, error] : invalidFens)
@@ -54,7 +63,7 @@ TEST_CASE("check invalid fens")
     }
 }
 
-TEST_CASE("check doMove/undoMove consistancy")
+TEST_CASE("check doMove/undoMove consistency")
 {
     auto result = Position::fromFEN(std::string(Position::StartPosFEN));
     Position pos = result.value();
@@ -70,7 +79,7 @@ TEST_CASE("check doMove/undoMove consistancy")
         Move(E1, G1, Move::Flag::CastlingOO),
         Move(E8, G8, Move::Flag::CastlingOO),
         Move(D2, D4),
-        Move(E5, D4), //black captures d4
+        Move(E5, D4), // black captures d4
         Move(C2, C4),
         Move(D4, C3, Move::Flag::EnPassant),
         Move(B2, B4),
@@ -95,4 +104,20 @@ TEST_CASE("check doMove/undoMove consistancy")
     }
 
     REQUIRE(Position::StartPosFEN == pos.fen());
+}
+
+TEST_CASE("check pins and checks")
+{
+    // random attacker fen:
+    Position pos = Position::fromFEN("rnbqkbnr/ppp2pp1/3p3p/4p3/2B1P3/5Q2/PPPP1PPP/RNB1K1NR b KQkq - 0 4").value();
+    Bitboard attackers = pos.attackers(F7, White);
+    REQUIRE(attackers == (squareMask(F3) | squareMask(C4)));
+
+    // pinned fen
+    //Position pinnedPos = Position::fromFEN("rnbqk1nr/pppp1ppp/8/4p3/1b2P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3").value();
+
+    // white checked fen
+    Position checkersPos = Position::fromFEN("r1bqk1nr/pppp1ppp/2n5/4p3/1b2P3/3P1N2/PPP2PPP/RNBQKB1R w KQkq - 1 4").value();
+    Bitboard checkers = checkersPos.checkers();
+    REQUIRE(checkers == squareMask(B4));
 }

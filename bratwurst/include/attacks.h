@@ -48,7 +48,7 @@ constexpr Bitboard dynamicAttacks(Square s, const std::span<const int[2]>& direc
 
 // Color irrelevant except for pawn attacks
 template<PieceType pt, Color c = White>
-inline Bitboard attacks(Square s, Bitboard blockers) noexcept
+inline Bitboard attacks(Square s, [[maybe_unused]] Bitboard blockers = 0ULL) noexcept
 {
 	ASSERT(isValid(s));
 
