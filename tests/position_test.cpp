@@ -114,7 +114,9 @@ TEST_CASE("check pins and checks")
     REQUIRE(attackers == (squareMask(F3) | squareMask(C4)));
 
     // pinned fen
-    //Position pinnedPos = Position::fromFEN("rnbqk1nr/pppp1ppp/8/4p3/1b2P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3").value();
+    Position pinnedPos = Position::fromFEN("rnbqk1nr/pppp1ppp/8/4p3/1b2P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3").value();
+    Bitboard pinned = pinnedPos.pinned();
+    REQUIRE(pinned == squareMask(D2));
 
     // white checked fen
     Position checkersPos = Position::fromFEN("r1bqk1nr/pppp1ppp/2n5/4p3/1b2P3/3P1N2/PPP2PPP/RNBQKB1R w KQkq - 1 4").value();

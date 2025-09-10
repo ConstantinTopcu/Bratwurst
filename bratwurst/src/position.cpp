@@ -122,6 +122,7 @@ std::expected<Position, Position::FenError> Position::fromFEN(const std::string&
     }
 
     pos.updateCheckers();
+    pos.updatePinned();
 
     return pos;
 }
@@ -175,7 +176,7 @@ std::string Position::fen() const noexcept
 
     fen += ' ' + std::to_string(state.halfMoveClock);
     fen += ' ' + std::to_string(m_fullMoveCounter);
-
+   
     return fen;
 }
 
@@ -266,6 +267,9 @@ void Position::doMove(Move move) noexcept
     m_fullMoveCounter += friendly;
     m_colorToMove = ~m_colorToMove;
     m_stateHistory.push(newStateInfo);
+
+    updateCheckers();
+    updatePinned();
 }
 
 void Position::undoMove() noexcept

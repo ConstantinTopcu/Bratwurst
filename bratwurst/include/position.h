@@ -33,6 +33,7 @@ struct StateInfo
 	Move prevMove;
 
 	Bitboard checkers;
+	Bitboard pinned;
 
 	constexpr bool hasCastlingRight(CastlingRight right) const noexcept
 	{
@@ -85,6 +86,8 @@ public:
 	inline Bitboard attackers(Square s, Color attackingColor) const noexcept;
 	inline void updateCheckers() noexcept;
 	inline Bitboard checkers() const noexcept;
+	inline void updatePinned() noexcept;
+	inline Bitboard pinned() const noexcept;
 
 	inline Color colorToMove() const noexcept;
 	inline uint16 fullMovecounter() const noexcept;
@@ -101,10 +104,6 @@ public:
 	inline Piece capturedPiece() const noexcept;
 	inline Move prevMove() const noexcept;
 
-	inline void movePiece(Square src, Square dst, Piece srcPiece) noexcept;
-	inline void placePiece(Square s, Piece piece) noexcept;
-	inline void removePiece(Square s, Piece piece) noexcept;
-
 private:
 	// Use both Piece array and bitboards for pieceTypes and colors, since both have their own advantages:
 	// - The Piece array enables the fast retrieval of a piece on a given square.
@@ -119,6 +118,10 @@ private:
 
 private:
 	void clear() noexcept;
+
+	inline void movePiece(Square src, Square dst, Piece srcPiece) noexcept;
+	inline void placePiece(Square s, Piece piece) noexcept;
+	inline void removePiece(Square s, Piece piece) noexcept;
 };
 
 template<typename... PieceTypes>
@@ -178,6 +181,39 @@ inline void Position::updateCheckers() noexcept
 inline Bitboard Position::checkers() const noexcept
 {
 	return stateInfo().checkers;
+}
+
+inline void Position::updatePinned() noexcept
+{
+	Color friendly = m_colorToMove;
+	Color enemy = ~friendly;
+	Square kingSq = kingSquare(friendly);
+	Bitboard friendlyPieces = colorBB(friendly);
+	Bitboard enemyPieces = colorBB(enemy);
+	Bitboard occupancy = friendlyPieces | enemyPieces;
+
+	Bitboard potentialPinned = attacks<Queen>(kingSq, occupancy) & friendlyPieces;
+	occupancy ^= potentialPinned;
+
+	Bitboard rooks = typeBB(Rook, Queen) & enemyPieces;
+	Bitboard bishops = typeBB(Bishop, Queen) & enemyPieces;
+	Bitboard XRayRookAttacks = attacks<Rook>(kingSq, occupancy);
+	Bitboard XRayBishopAttacks = attacks<Bishop>(kingSq, occupancy);
+	Bitboard pinners = (XRayRookAttacks & rooks) | (XRayBishopAttacks & bishops);
+
+	Bitboard pinned = 0ULL;
+	while (pinners)
+	{
+		Square pinner = popLsb(pinners);
+		pinned |= (Precomputed::lineBBs[1][kingSq][pinner] & friendlyPieces);
+	}
+
+	stateInfo().pinned = pinned;
+}
+
+inline Bitboard Position::pinned() const noexcept
+{
+	return stateInfo().pinned;;
 }
 
 inline Color Position::colorToMove() const noexcept
