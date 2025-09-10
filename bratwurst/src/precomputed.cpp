@@ -11,9 +11,9 @@ namespace Bratwurst::Precomputed
 {
 
 // precomputed tables definition
-
 Magic magics[2][SquareNum];
 Bitboard pseudoAttacks[PieceTypeNum + 1][SquareNum];
+Bitboard lineBBs[2][SquareNum][SquareNum];
 static std::atomic_bool initialized = false;
 
 // piece offsets
@@ -114,8 +114,29 @@ void init() noexcept
 		pseudoAttacks[King][s] = dynamicAttacks(s, kingOffsets);
 	}
 
+	for (Square s = A1; s < SquareNum; s++)
+	{
+		for (Square s2 = A1; s2 < SquareNum; s2++)
+		{
+			lineBBs[0][s][s2] = 0ULL;
+			lineBBs[1][s][s2] = 0ULL;
+
+			if (pseudoAttacks[Queen][s] & squareMask(s2))
+			{
+				bool isDiagonal = (pseudoAttacks[Bishop][s] & squareMask(s2));
+				PieceType pt = isDiagonal ? Bishop : Rook;
+
+				lineBBs[0][s][s2] = (pseudoAttacks[pt][s] & pseudoAttacks[pt][s2]) | squareMask(s) | squareMask(s2);
+				lineBBs[1][s][s2] = squareMask(s2) | ((isDiagonal) ?
+					attacks<Bishop>(s, squareMask(s2)) & attacks<Bishop>(s2, squareMask(s)) :
+					attacks<Rook>(s, squareMask(s2)) & attacks<Rook>(s2, squareMask(s)));
+			}
+		}
+	}
+
 	auto end = clock::now();
 	std::chrono::duration<double, std::milli> duration = end - start;
+	std::cout << "time to initialize: " << duration << std::endl;
 	initialized = true;
 }
 

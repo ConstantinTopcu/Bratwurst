@@ -41,6 +41,11 @@ extern Magic magics[2][SquareNum];
 // White and Black pawns have different attack patterns, so use WhitePawn and BlackPawn respectively.
 extern Bitboard pseudoAttacks[PieceTypeNum + 1][SquareNum];
 
+// [0][s1][s2]: bitboard of continious line that goes throught the squares s1 and s2.
+// [1][s1][s2]: bitboard of line, thats in between the squares s1 and s2, where s2 is also included.
+// If s1 and s2 do not align, the bitboard is set to 0ULL.
+extern Bitboard lineBBs[2][SquareNum][SquareNum];
+
 void init() noexcept;
 void cleanup() noexcept;
 }
