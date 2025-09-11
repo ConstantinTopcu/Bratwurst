@@ -1,2 +1,2 @@
-add_library(BratwurstEngine STATIC "src/position.cpp" "src/precomputed.cpp" "include/magic_gen.h" "src/magic_gen.cpp")
+add_library(BratwurstEngine STATIC "src/position.cpp" "src/precomputed.cpp" "include/magic_gen.h" "src/magic_gen.cpp"  "include/types/move_list.h")
 target_include_directories(BratwurstEngine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
