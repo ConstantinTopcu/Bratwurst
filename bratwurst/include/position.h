@@ -78,12 +78,14 @@ public:
 	template<typename... PieceTypes>
 	inline Bitboard typeBB(PieceTypes... types) const noexcept;
 	inline Bitboard colorBB(Color c) const noexcept;
-	inline Bitboard pieceBB(Color c, PieceType type) const noexcept;
+	
+	template<typename... PieceTypes>
+	inline Bitboard pieceBB(Color c, PieceTypes... types) const noexcept;
 	inline Bitboard occupancyBB() const noexcept;
 	inline Piece pieceOn(Square s) const noexcept;
 	inline Square kingSquare(Color c) const noexcept;
 
-	inline Bitboard attackers(Square s, Color attackingColor) const noexcept;
+	inline Bitboard attackers(Square s, Color attackingColor, Bitboard blockers) const noexcept;
 	inline void updateCheckers() noexcept;
 	inline Bitboard checkers() const noexcept;
 	inline void updatePinned() noexcept;
@@ -97,12 +99,20 @@ public:
 	inline const StateInfo& stateInfo() const noexcept;
 	inline bool hasCastlingRight(CastlingRight rights) const noexcept;
 	inline uint8 halfmoveClock() const noexcept;
-	inline Square enPassantMove() const noexcept;
+	inline Square enPassantSquare() const noexcept;
 
 	// returns the piece that was captured last move
 	// returns NonePiece in case there was no capture
 	inline Piece capturedPiece() const noexcept;
 	inline Move prevMove() const noexcept;
+
+	inline void printMoveHistory() const noexcept
+	{
+		for (const StateInfo& stateInfo : m_stateHistory)
+		{
+			stateInfo.prevMove.print();
+		}
+	}
 
 private:
 	// Use both Piece array and bitboards for pieceTypes and colors, since both have their own advantages:
@@ -114,7 +124,7 @@ private:
 
 	Color m_colorToMove;
 	uint16 m_fullMoveCounter;
-	std::stack<StateInfo> m_stateHistory;
+	std::deque<StateInfo> m_stateHistory;
 
 private:
 	void clear() noexcept;
@@ -136,11 +146,11 @@ inline Bitboard Position::colorBB(Color c) const noexcept
 	ASSERT(isValid(c));
 	return m_colorBBs[c];
 }
-
-inline Bitboard Position::pieceBB(Color c, PieceType type) const noexcept
+template<typename... PieceTypes>
+inline Bitboard Position::pieceBB(Color c, PieceTypes... types) const noexcept
 {
-	ASSERT(isValid(c) && isValid(type));
-	return m_colorBBs[c] & m_typeBBs[type];
+	ASSERT(isValid(c));
+	return m_colorBBs[c] & typeBB(types...);
 }
 
 inline Bitboard Position::occupancyBB() const noexcept
@@ -159,23 +169,22 @@ inline Square Position::kingSquare(Color c) const noexcept
 	return lsb(pieceBB(c, King));
 }
 
-inline Bitboard Position::attackers(Square s, Color attackingColor) const noexcept
+inline Bitboard Position::attackers(Square s, Color attackingColor, Bitboard blockers) const noexcept
 {
 	Bitboard attackers = 0ULL;
-	Bitboard blockers = occupancyBB();
 
-	attackers |= Precomputed::pseudoAttacks[makePiece(attackingColor, Pawn)][s] & pieceBB(attackingColor, Pawn);
-	attackers |= attacks<Knight>(s) & pieceBB(attackingColor, Knight);
-	attackers |= attacks<Bishop>(s, blockers) & (typeBB(Bishop, Queen) & colorBB(attackingColor));
-	attackers |= attacks<Rook>(s, blockers) & (typeBB(Rook, Queen) & colorBB(attackingColor));
-	attackers |= attacks<King>(s, blockers) & pieceBB(attackingColor, King);
+	attackers |= Precomputed::pseudoAttacks[makePiece(~attackingColor, Pawn)][s] & pieceBB(attackingColor, Pawn);
+	attackers |= attacksBB<Knight>(s) & pieceBB(attackingColor, Knight);
+	attackers |= attacksBB<Bishop>(s, blockers) & (typeBB(Bishop, Queen) & colorBB(attackingColor));
+	attackers |= attacksBB<Rook>(s, blockers) & (typeBB(Rook, Queen) & colorBB(attackingColor));
+	attackers |= attacksBB<King>(s, blockers) & pieceBB(attackingColor, King);
 
 	return attackers;
 }
 
 inline void Position::updateCheckers() noexcept
 {
-	stateInfo().checkers = attackers(kingSquare(m_colorToMove), ~m_colorToMove);
+	stateInfo().checkers = attackers(kingSquare(m_colorToMove), ~m_colorToMove, occupancyBB());
 }
 
 inline Bitboard Position::checkers() const noexcept
@@ -192,13 +201,13 @@ inline void Position::updatePinned() noexcept
 	Bitboard enemyPieces = colorBB(enemy);
 	Bitboard occupancy = friendlyPieces | enemyPieces;
 
-	Bitboard potentialPinned = attacks<Queen>(kingSq, occupancy) & friendlyPieces;
+	Bitboard potentialPinned = attacksBB<Queen>(kingSq, occupancy) & friendlyPieces;
 	occupancy ^= potentialPinned;
 
 	Bitboard rooks = typeBB(Rook, Queen) & enemyPieces;
 	Bitboard bishops = typeBB(Bishop, Queen) & enemyPieces;
-	Bitboard XRayRookAttacks = attacks<Rook>(kingSq, occupancy);
-	Bitboard XRayBishopAttacks = attacks<Bishop>(kingSq, occupancy);
+	Bitboard XRayRookAttacks = attacksBB<Rook>(kingSq, occupancy);
+	Bitboard XRayBishopAttacks = attacksBB<Bishop>(kingSq, occupancy);
 	Bitboard pinners = (XRayRookAttacks & rooks) | (XRayBishopAttacks & bishops);
 
 	Bitboard pinned = 0ULL;
@@ -230,13 +239,13 @@ inline uint16 Position::fullMovecounter() const noexcept
 inline StateInfo& Position::stateInfo() noexcept
 {
 	ASSERT(!m_stateHistory.empty());
-	return m_stateHistory.top();
+	return m_stateHistory.back();
 }
 
 inline const StateInfo& Position::stateInfo() const noexcept
 {
 	ASSERT(!m_stateHistory.empty());
-	return m_stateHistory.top();
+	return m_stateHistory.back();
 }
 
 inline bool Position::hasCastlingRight(CastlingRight right) const noexcept
@@ -251,7 +260,7 @@ inline uint8 Position::halfmoveClock() const noexcept
 	return stateInfo().halfMoveClock;
 }
 
-inline Square Position::enPassantMove() const noexcept
+inline Square Position::enPassantSquare() const noexcept
 {
 	ASSERT(!m_stateHistory.empty());
 	return stateInfo().enPassantSquare;

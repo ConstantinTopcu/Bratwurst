@@ -6,6 +6,8 @@
 #include "types/piece.h"
 #include "types/castling_right.h"
 
+#include <iostream>
+
 namespace Bratwurst
 {
 
@@ -48,6 +50,16 @@ struct Move
 	{
 		ASSERT(promotion());
 		return static_cast<PieceType>((flag() ^ Flag::PromotionMask) + 1);
+	}
+
+	inline void print() const noexcept
+	{
+		std::cout << toString() << "\n";
+	}
+
+	inline std::string toString() const noexcept
+	{
+		return std::string("[" + squareToString(src()) + "][" + squareToString(dst()) + "][" + std::to_string(static_cast<int>(flag())) + "]");
 	}
 
 	// The move is packed into 16 bits with the following layout:

@@ -91,6 +91,14 @@ inline int popCnt(Bitboard mask) noexcept
 #endif
 }
 
+template<Direction d>
+constexpr Bitboard shift(Bitboard b)
+{
+	d > 0 ? b <<= d : b >>= -d;
+
+	return b;
+}
+
 inline std::string toString(Bitboard b) noexcept
 {
 	std::string str;

@@ -11,7 +11,7 @@ void Position::clear() noexcept
     std::fill(m_typeBBs, m_typeBBs + PieceTypeNum, 0ULL);
     std::fill(m_colorBBs, m_colorBBs + ColorNum, 0ULL);
 
-    while (!m_stateHistory.empty()) m_stateHistory.pop();
+    while (!m_stateHistory.empty()) m_stateHistory.pop_back();
 
     m_colorToMove = NoneColor;
     m_fullMoveCounter = 0;
@@ -24,8 +24,8 @@ std::expected<Position, Position::FenError> Position::fromFEN(const std::string&
     Position pos;
     pos.clear();
 
-    pos.m_stateHistory.emplace();
-    StateInfo& currentStateInfo = pos.m_stateHistory.top();
+    pos.m_stateHistory.emplace_back();
+    StateInfo& currentStateInfo = pos.m_stateHistory.back();
 
     // split FEN into its 6 components
     std::vector<std::string> parts;
@@ -206,9 +206,15 @@ void Position::doMove(Move move) noexcept
         .prevMove = move
     };
 
+
+
     // Handle special cases
     if (isCapture)
     {
+        if (pieceTypeOf(capturedPiece) == King)
+        {
+            DebugBreak();
+        }
         // Remove captured piece from dst
         ASSERT(colorOf(capturedPiece) == enemy);
         ASSERT(pieceTypeOf(capturedPiece) != King);
@@ -260,13 +266,23 @@ void Position::doMove(Move move) noexcept
         if (isValid(right)) newStateInfo.removeCastlingRight(right);
     }
 
+    if (isCapture)
+    {
+        newStateInfo.halfMoveClock = 0;
+    }
+
     // Reset halfmove clock on pawn move or capture
-    if (srcType == Pawn || isCapture) newStateInfo.halfMoveClock = 0;
+    if (srcType == Pawn)
+    {
+        newStateInfo.halfMoveClock = 0;
+        Square potentialEnPassantSquare = src + ((friendly == White) ? Up : Down);
+        if (std::abs(int(src) - int(dst)) == 2 * Up) newStateInfo.enPassantSquare = potentialEnPassantSquare;
+    }
 
     // Increment fullmove counter after Black's move 
     m_fullMoveCounter += friendly;
     m_colorToMove = ~m_colorToMove;
-    m_stateHistory.push(newStateInfo);
+    m_stateHistory.push_back(newStateInfo);
 
     updateCheckers();
     updatePinned();
@@ -331,6 +347,6 @@ void Position::undoMove() noexcept
 
     m_fullMoveCounter -= friendly;
     m_colorToMove = friendly;
-    m_stateHistory.pop();
+    m_stateHistory.pop_back();
 }
 }

@@ -48,7 +48,7 @@ constexpr Bitboard dynamicAttacks(Square s, const std::span<const int[2]>& direc
 
 // Color irrelevant except for pawn attacks
 template<PieceType pt, Color c = White>
-inline Bitboard attacks(Square s, [[maybe_unused]] Bitboard blockers = 0ULL) noexcept
+inline Bitboard attacksBB(Square s, [[maybe_unused]] Bitboard blockers = 0ULL) noexcept
 {
 	ASSERT(isValid(s));
 
@@ -57,7 +57,7 @@ inline Bitboard attacks(Square s, [[maybe_unused]] Bitboard blockers = 0ULL) noe
 	else if constexpr (pt == Knight) return Precomputed::pseudoAttacks[Knight][s];
 	else if constexpr (pt == Bishop) return Precomputed::magics[0][s].attacks(blockers);
 	else if constexpr (pt == Rook) return Precomputed::magics[1][s].attacks(blockers);
-	else if constexpr (pt == Queen) return (attacks<Bishop>(s, blockers) | attacks<Rook>(s, blockers));
+	else if constexpr (pt == Queen) return (attacksBB<Bishop>(s, blockers) | attacksBB<Rook>(s, blockers));
 	else if constexpr (pt == King) return Precomputed::pseudoAttacks[King][s];
 	else static_assert(false, "Unsupported piece type in attacks()");
 }

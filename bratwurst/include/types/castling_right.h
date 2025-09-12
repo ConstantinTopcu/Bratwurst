@@ -40,10 +40,10 @@ namespace Bratwurst
 	{
 		switch (s)
 		{
-		case(A1): return CastlingRight::WhiteOO;
-		case(H1): return CastlingRight::WhiteOOO;
-		case(A8): return CastlingRight::BlackOO;
-		case(H8): return CastlingRight::BlackOOO;
+		case(A1): return CastlingRight::WhiteOOO;
+		case(H1): return CastlingRight::WhiteOO;
+		case(A8): return CastlingRight::BlackOOO;
+		case(H8): return CastlingRight::BlackOO;
 		}
 
 		return CastlingRight::CastlingRightNone;

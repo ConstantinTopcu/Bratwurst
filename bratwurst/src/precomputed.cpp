@@ -127,9 +127,9 @@ void init() noexcept
 				PieceType pt = isDiagonal ? Bishop : Rook;
 
 				lineBBs[0][s][s2] = (pseudoAttacks[pt][s] & pseudoAttacks[pt][s2]) | squareMask(s) | squareMask(s2);
-				lineBBs[1][s][s2] = squareMask(s2) | ((isDiagonal) ?
-					attacks<Bishop>(s, squareMask(s2)) & attacks<Bishop>(s2, squareMask(s)) :
-					attacks<Rook>(s, squareMask(s2)) & attacks<Rook>(s2, squareMask(s)));
+				lineBBs[1][s][s2] = ((isDiagonal) ?
+					attacksBB<Bishop>(s, squareMask(s2)) & attacksBB<Bishop>(s2, squareMask(s)) :
+					attacksBB<Rook>(s, squareMask(s2)) & attacksBB<Rook>(s2, squareMask(s)));
 			}
 		}
 	}

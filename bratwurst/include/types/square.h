@@ -55,8 +55,11 @@ namespace Bratwurst
 	// Operator overloading to allow change of Square via applying a Direction using the + operator
 	constexpr Direction operator*(int factor, Direction dir) noexcept { return static_cast<Direction>(factor * static_cast<int>(dir)); }
 	inline Direction& operator*=(Direction& d, int factor) noexcept	{ return d = factor * d; }
+
 	constexpr Square operator+(Square s, Direction d) noexcept { return static_cast<Square>(static_cast<int>(s) + static_cast<int>(d)); }
 	inline Square& operator+=(Square& s, Direction d) noexcept { return s = s + d; }
+	constexpr Square operator-(Square s, Direction d) noexcept { return static_cast<Square>(static_cast<int>(s) - static_cast<int>(d)); }
+	inline Square& operator-=(Square& s, Direction d) noexcept { return s = s - d; }
 
 	// Operator overload to allow addition for Rank and File enums
 	constexpr File operator+(File f, int offset) { return static_cast<File>(static_cast<int>(f) + offset); }
