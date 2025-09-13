@@ -6,6 +6,8 @@
 #include "types/piece.h"
 #include "types/castling_right.h"
 
+#include "types/static_vector.h"
+
 #include <iostream>
 
 namespace Bratwurst
@@ -67,6 +69,8 @@ struct Move
 	// [ 6..11]  (6 bits)  Destination square  (Square::A1 - Square::H8)
 	// [12..15]  (4 bits)  Flag                (value of Move::Flag enum)
 	uint16 data;
-
 };
+
+constexpr size_t MaxMoves = 218;
+using MoveList = StaticVector<Move, MaxMoves>;
 }

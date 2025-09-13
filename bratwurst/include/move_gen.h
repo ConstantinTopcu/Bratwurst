@@ -3,7 +3,7 @@
 #include "core.h"
 
 #include "position.h"
-#include "types/move_list.h"
+#include "types/move.h"
 
 namespace Bratwurst
 {

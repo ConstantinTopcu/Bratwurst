@@ -45,6 +45,8 @@ int main(char argc, char* argv[])
 	size_t nodes = 0;
 	perft(pos, 6, nodes, true);
 
+	if (nodes != 4470850742) DebugBreak();
+
 	auto end = Clock::now();
 	std::chrono::duration<double, std::ratio<1, 1>> time = end - start;
 	std::cout << "reached " << nodes << " nodes in " << time << "." << std::endl;

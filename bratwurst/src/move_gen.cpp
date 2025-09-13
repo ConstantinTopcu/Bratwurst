@@ -30,7 +30,7 @@ void generatePawnMoves(const Position& pos, Bitboard mask, MoveList& out) noexce
 				Square dst = popLsb(attacks);
 				Square src = dst - offset;
 				if (blockedByPin(src, dst)) continue;
-				out.emplace(src, dst, Move::Flag::None);
+				out.emplace_back(src, dst, Move::Flag::None);
 			}
 		};
 	auto addPromotionMoves = [&](Bitboard attacks, Direction offset)
@@ -42,10 +42,10 @@ void generatePawnMoves(const Position& pos, Bitboard mask, MoveList& out) noexce
 
 				if (blockedByPin(src, dst)) continue;
 
-				out.emplace(src, dst, Move::Flag::QueenPromotion);
-				out.emplace(src, dst, Move::Flag::KnightPromotion);
-				out.emplace(src, dst, Move::Flag::BishopPromotion);
-				out.emplace(src, dst, Move::Flag::RookPromotion);
+				out.emplace_back(src, dst, Move::Flag::QueenPromotion);
+				out.emplace_back(src, dst, Move::Flag::KnightPromotion);
+				out.emplace_back(src, dst, Move::Flag::BishopPromotion);
+				out.emplace_back(src, dst, Move::Flag::RookPromotion);
 			}
 		};
 
@@ -81,7 +81,7 @@ void generatePawnMoves(const Position& pos, Bitboard mask, MoveList& out) noexce
 			bool resultsInCheck =	attacksBB<Rook>(pos.kingSquare(friendly), postEpOccupancy) & (pos.pieceBB(enemy, Rook, Queen)) ||
 									attacksBB<Bishop>(pos.kingSquare(friendly), postEpOccupancy) & (pos.pieceBB(enemy, Bishop, Queen));
 
-			if (!resultsInCheck) out.emplace(src, epSquare, Move::Flag::EnPassant);
+			if (!resultsInCheck) out.emplace_back(src, epSquare, Move::Flag::EnPassant);
 		}
 	}
 
@@ -140,7 +140,7 @@ void generateTypeMoves(const Position& pos, Bitboard mask, MoveList& out) noexce
 		{
 			ASSERT(pos.pieceOn(rookCastlingSources[kingSideRight]) == makePiece(friendly, Rook));
 			ASSERT(pos.pieceOn(kingCastlingSources[kingSideRight]) == makePiece(friendly, King));
-			out.emplace(kingCastlingSources[kingSideRight], kingCastlingDestinations[kingSideRight], Move::Flag::CastlingOO);
+			out.emplace_back(kingCastlingSources[kingSideRight], kingCastlingDestinations[kingSideRight], Move::Flag::CastlingOO);
 		}
 
 		// queenside castling
@@ -152,14 +152,14 @@ void generateTypeMoves(const Position& pos, Bitboard mask, MoveList& out) noexce
 		{
 			ASSERT(pos.pieceOn(rookCastlingSources[queenSideRight]) == makePiece(friendly, Rook));
 			ASSERT(pos.pieceOn(kingCastlingSources[queenSideRight]) == makePiece(friendly, King));
-			out.emplace(kingCastlingSources[queenSideRight], kingCastlingDestinations[queenSideRight], Move::Flag::CastlingOOO);
+			out.emplace_back(kingCastlingSources[queenSideRight], kingCastlingDestinations[queenSideRight], Move::Flag::CastlingOOO);
 		}
 
 		while (attacks)
 		{
 			Square dst = popLsb(attacks);
 			if (pos.attackers(dst, enemy, occupancy)) continue;
-			out.emplace(kingSq, dst, Move::Flag::None);
+			out.emplace_back(kingSq, dst, Move::Flag::None);
 		}
 	}
 
@@ -178,7 +178,7 @@ void generateTypeMoves(const Position& pos, Bitboard mask, MoveList& out) noexce
 			while (attacks)
 			{
 				Square dst = popLsb(attacks);
-				out.emplace(src, dst, Move::Flag::None);
+				out.emplace_back(src, dst, Move::Flag::None);
 			}
 		}
 	}

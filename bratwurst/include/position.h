@@ -3,6 +3,7 @@
 #include "core.h"
 
 #include "types/castling_right.h"
+#include "types/static_vector.h"
 #include "types/bitboard.h"
 #include "types/square.h"
 #include "types/piece.h"
@@ -46,6 +47,8 @@ struct StateInfo
 		castlingRights &= ~(1 << right);
 	}
 };
+
+using StateHistory = StaticVector<StateInfo, 512>;
 
 class Position
 {
@@ -124,7 +127,7 @@ private:
 
 	Color m_colorToMove;
 	uint16 m_fullMoveCounter;
-	std::deque<StateInfo> m_stateHistory;
+	StateHistory m_stateHistory;
 
 private:
 	void clear() noexcept;
