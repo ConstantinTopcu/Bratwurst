@@ -53,13 +53,13 @@ namespace Bratwurst
 	ENABLE_ENUM_ARITHMETIC(Rank);
 
 	// Operator overloading to allow change of Square via applying a Direction using the + operator
-	constexpr Direction operator*(int factor, Direction dir) noexcept { return static_cast<Direction>(factor * static_cast<int>(dir)); }
-	inline Direction& operator*=(Direction& d, int factor) noexcept	{ return d = factor * d; }
+	constexpr Direction operator*(int factor, Direction dir)  { return static_cast<Direction>(factor * static_cast<int>(dir)); }
+	inline Direction& operator*=(Direction& d, int factor) 	{ return d = factor * d; }
 
-	constexpr Square operator+(Square s, Direction d) noexcept { return static_cast<Square>(static_cast<int>(s) + static_cast<int>(d)); }
-	inline Square& operator+=(Square& s, Direction d) noexcept { return s = s + d; }
-	constexpr Square operator-(Square s, Direction d) noexcept { return static_cast<Square>(static_cast<int>(s) - static_cast<int>(d)); }
-	inline Square& operator-=(Square& s, Direction d) noexcept { return s = s - d; }
+	constexpr Square operator+(Square s, Direction d)  { return static_cast<Square>(static_cast<int>(s) + static_cast<int>(d)); }
+	inline Square& operator+=(Square& s, Direction d)  { return s = s + d; }
+	constexpr Square operator-(Square s, Direction d)  { return static_cast<Square>(static_cast<int>(s) - static_cast<int>(d)); }
+	inline Square& operator-=(Square& s, Direction d)  { return s = s - d; }
 
 	// Operator overload to allow addition for Rank and File enums
 	constexpr File operator+(File f, int offset) { return static_cast<File>(static_cast<int>(f) + offset); }
@@ -69,41 +69,41 @@ namespace Bratwurst
 
 
 	// Validation functions
-	constexpr bool isValid(Square s) noexcept
+	constexpr bool isValid(Square s) 
 	{
 		return s < NoneSquare;
 	}
 
-	constexpr bool isValid(File f) noexcept
+	constexpr bool isValid(File f) 
 	{
 		return f < NoneFile;
 	}
 
-	constexpr bool isValid(Rank r) noexcept
+	constexpr bool isValid(Rank r) 
 	{
 		return r < NoneRank;
 	}
 
 	// Conversion functions
-	constexpr Rank rankOf(Square s) noexcept
+	constexpr Rank rankOf(Square s) 
 	{
 		ASSERT(isValid(s));
 		return static_cast<Rank>(static_cast<uint8>(s) >> 3);
 	}
 
-	constexpr File fileOf(Square s) noexcept
+	constexpr File fileOf(Square s) 
 	{
 		ASSERT(isValid(s));
 		return static_cast<File>(static_cast<uint8>(s) & 0b111);
 	}
 
-	constexpr Square makeSquare(File f, Rank r) noexcept
+	constexpr Square makeSquare(File f, Rank r) 
 	{
 		ASSERT(isValid(f) && isValid(r));
 		return static_cast<Square>(f + r * FileNum);
 	}
 
-	inline Square stringToSquare(const std::string& s) noexcept
+	inline Square stringToSquare(const std::string& s) 
 	{
 		if (s == "-" || s.size() != 2) return NoneSquare;
 		if (s[0] < 'a' || s[0] > 'h') return NoneSquare;
@@ -114,7 +114,7 @@ namespace Bratwurst
 		return makeSquare(file, rank);
 	}
 
-	inline std::string squareToString(Square s) noexcept
+	inline std::string squareToString(Square s) 
 	{
 		if (!isValid(s)) return "-";
 		char fileChar = 'a' + static_cast<int>(fileOf(s));

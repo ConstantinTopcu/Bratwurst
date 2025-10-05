@@ -2,10 +2,10 @@
 
 #include "core.h"
 #include "enum_ops.h"
+#include "square.h"
 
 namespace Bratwurst
 {
-
 	// Currently Piece has a stride of 6, meaning extractions cannot be made using a bitmask.
 	// If this becomes a hotpath bottleneck, the stride might be changed to 8, to enable faster extractions
 	enum Piece : uint8
@@ -33,40 +33,45 @@ namespace Bratwurst
 	ENABLE_ENUM_ARITHMETIC(Color);
 
 	// Validation functions
-	constexpr bool isValid(Piece p) noexcept
+	constexpr bool isValid(Piece p) 
 	{
 		return p < NonePiece;
 	}
 
-	constexpr bool isValid(PieceType pt) noexcept
+	constexpr bool isValid(PieceType pt) 
 	{
 		return pt < NonePieceType;
 	}
 
-	constexpr bool isValid(Color c) noexcept
+	constexpr bool isValid(Color c) 
 	{
 		return c < NoneColor;
 	}
 
-	constexpr PieceType pieceTypeOf(Piece p) noexcept
+	constexpr PieceType pieceTypeOf(Piece p) 
 	{
 		ASSERT(isValid(p));
 		return (static_cast<PieceType>(p % PieceTypeNum));
 	}
 
-	constexpr Color colorOf(Piece p) noexcept
+	constexpr Color colorOf(Piece p) 
 	{
 		ASSERT(isValid(p));
 		return static_cast<Color>(p >= BlackPawn);
 	}
 
-	constexpr Piece makePiece(Color c, PieceType pt) noexcept
+	constexpr Piece makePiece(Color c, PieceType pt) 
 	{
 		ASSERT(isValid(c) && isValid(pt));
 		return static_cast<Piece>(c * PieceTypeNum + pt);
 	}
 
-	constexpr char pieceToChar(Piece p) noexcept 
+	constexpr Direction pawnPushDir(Color c)
+	{
+		return (c == White) ? Up : Down;
+	}
+
+	constexpr char pieceToChar(Piece p)  
 	{ 
 		switch (p) 
 		{ 
@@ -88,7 +93,7 @@ namespace Bratwurst
 		return '.';
 	} 
 
-	constexpr Piece charToPiece(char p) noexcept 
+	constexpr Piece charToPiece(char p)  
 	{ 
 		switch (p)
 		{

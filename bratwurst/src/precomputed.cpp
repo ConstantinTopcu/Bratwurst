@@ -91,7 +91,7 @@ Magic initMagic(Square s, std::span<const int[2]> directions, Bitboard magicBB)
 }
 
 
-void init() noexcept
+void init() 
 {
 	if (initialized) return;
 
@@ -140,7 +140,7 @@ void init() noexcept
 	initialized = true;
 }
 
-void cleanup() noexcept
+void cleanup() 
 {
 	if (!initialized) return;
 

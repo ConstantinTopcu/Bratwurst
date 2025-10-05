@@ -18,13 +18,13 @@ struct Magic
 	Bitboard mask = 0ULL;
 	Bitboard magic = 0ULL;
 
-	inline size_t index(Bitboard blockers) const noexcept
+	inline size_t index(Bitboard blockers) const 
 	{
 		ASSERT(attacksTable != nullptr);
 		return ((blockers & mask) * magic) >> shift;
 	}
 
-	inline Bitboard attacks(Bitboard blockers) const noexcept
+	inline Bitboard attacks(Bitboard blockers) const 
 	{
 		ASSERT(attacksTable != nullptr);
 		size_t i = index(blockers);
@@ -46,6 +46,6 @@ extern Bitboard pseudoAttacks[PieceTypeNum + 1][SquareNum];
 // If s1 and s2 do not align, the bitboard is set to 0ULL.
 extern Bitboard lineBBs[2][SquareNum][SquareNum];
 
-void init() noexcept;
-void cleanup() noexcept;
+void init() ;
+void cleanup() ;
 }

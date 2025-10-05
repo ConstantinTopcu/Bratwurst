@@ -110,7 +110,7 @@ TEST_CASE("check pins and checks")
 {
     // random attacker fen:
     Position pos = Position::fromFEN("rnbqkbnr/ppp2pp1/3p3p/4p3/2B1P3/5Q2/PPPP1PPP/RNB1K1NR b KQkq - 0 4").value();
-    Bitboard attackers = pos.attackers(F7, White);
+    Bitboard attackers = pos.attackers(F7, White, pos.occupancyBB());
     REQUIRE(attackers == (squareMask(F3) | squareMask(C4)));
 
     // pinned fen

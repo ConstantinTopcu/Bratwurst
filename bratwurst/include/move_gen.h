@@ -7,14 +7,15 @@
 
 namespace Bratwurst
 {
-	enum class GenType
+	enum GenType
 	{
-		All,
-		Capture,
-		Quiet
+		Captures = 1 << 0,
+		Quiets = 1 << 1,
+		Promotions = 1 << 2,
+		All = Captures | Quiets | Promotions,
 	};
 
 	template<GenType>
-	void generateMoves(const Position& pos, MoveList& out) noexcept;
+	MoveList generateMoves(const Position& pos);
 
 }

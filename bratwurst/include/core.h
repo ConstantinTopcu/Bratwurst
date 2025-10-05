@@ -35,37 +35,33 @@
 #define DebugBreak() raise(SIGTRAP)
 #endif
 
-#ifdef BUILD_DEBUG
+#ifdef ENABLE_DEBUG
 #include <iostream>
 
-    // Helpers to count args
-#define GET_MACRO(_1,_2,NAME,...) NAME
-
-// ASSERT with just expr
-#define ASSERT1(expr) \
+#define ASSERT(expr) \
         do { \
             if (!(expr)) { \
+                std::cerr << "[ASSERT FAILED] " << #expr \
+                          << "\n  Location: " << __FILE__ << ":" << __LINE__ << std::endl; \
                 DebugBreak(); \
-                std::cerr << "Assertion failed: " << #expr << std::endl; \
-                std::cerr << "In file: " << __FILE__ << ", line: " << __LINE__ << std::endl; \
             } \
-        } while (0)
+        } while(0)
 
-// ASSERT with expr + msg
-#define ASSERT2(expr, msg) \
+// Assert with custom message
+#define ASSERT_MSG(expr, msg) \
         do { \
             if (!(expr)) { \
+                std::cerr << "[ASSERT FAILED] " << #expr \
+                          << "\n  Message: " << msg \
+                          << "\n  Location: " << __FILE__ << ":" << __LINE__ << std::endl; \
                 DebugBreak(); \
-                std::cerr << "Assertion failed: " << #expr << ", message: " << msg << std::endl; \
-                std::cerr << "In file: " << __FILE__ << ", line: " << __LINE__ << std::endl; \
             } \
-        } while (0)
+        } while(0)
 
-// Dispatcher macro
-#define ASSERT(...) GET_MACRO(__VA_ARGS__, ASSERT2, ASSERT1)(__VA_ARGS__)
 
 #else
-#define ASSERT(...) ((void)0)
+#define ASSERT(expr) ((void)0)
+#define ASSERT_MSG(expr, msg) ((void)0)
 #endif
 
 namespace Bratwurst

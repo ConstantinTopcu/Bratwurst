@@ -13,25 +13,25 @@ namespace Bratwurst
 
 using Bitboard = uint64;
 
-constexpr Bitboard squareMask(Square s) noexcept
+constexpr Bitboard squareMask(Square s) 
 {
 	ASSERT(isValid(s));
 	return 1ULL << s;
 }
 
-constexpr Bitboard rankMask(Rank r) noexcept
+constexpr Bitboard rankMask(Rank r) 
 {
 	ASSERT(isValid(r));
 	return 0xFFULL << (r * FileNum);
 }
 
-constexpr Bitboard fileMask(File f) noexcept
+constexpr Bitboard fileMask(File f) 
 {
 	ASSERT(isValid(f));
 	return 0x0101010101010101ULL << f;
 }
 
-inline Bitboard randomBitboard() noexcept
+inline Bitboard randomBitboard() 
 {
 	static std::random_device rd;
 	static std::mt19937_64 gen(rd());
@@ -39,7 +39,7 @@ inline Bitboard randomBitboard() noexcept
 	return distrib(gen);
 }
 
-inline Square lsb(Bitboard mask) noexcept
+inline Square lsb(Bitboard mask) 
 {
 	ASSERT(mask != 0ULL);
 
@@ -53,7 +53,7 @@ inline Square lsb(Bitboard mask) noexcept
 #endif
 }
 
-inline Square msb(Bitboard mask) noexcept
+inline Square msb(Bitboard mask) 
 {
 	ASSERT(mask != 0ULL);
 
@@ -66,7 +66,7 @@ inline Square msb(Bitboard mask) noexcept
 #endif
 }
 
-inline Square popLsb(Bitboard& mask) noexcept
+inline Square popLsb(Bitboard& mask) 
 {
 	ASSERT(mask != 0ULL);
 	const Square square = lsb(mask);
@@ -74,7 +74,7 @@ inline Square popLsb(Bitboard& mask) noexcept
 	return square;
 }
 
-inline Square popMsb(Bitboard& mask) noexcept
+inline Square popMsb(Bitboard& mask) 
 {
 	ASSERT(mask != 0ULL);
 	const Square square = msb(mask);
@@ -82,7 +82,7 @@ inline Square popMsb(Bitboard& mask) noexcept
 	return square;
 }
 
-inline int popCnt(Bitboard mask) noexcept
+inline int popCnt(Bitboard mask) 
 {
 #if defined(COMPILER_MSVC)
 	return static_cast<int>(__popcnt64(mask));
@@ -94,12 +94,13 @@ inline int popCnt(Bitboard mask) noexcept
 template<Direction d>
 constexpr Bitboard shift(Bitboard b)
 {
+	// if d is positive, shift left, else shift - right
 	d > 0 ? b <<= d : b >>= -d;
 
 	return b;
 }
 
-inline std::string toString(Bitboard b) noexcept
+inline std::string toString(Bitboard b) 
 {
 	std::string str;
 

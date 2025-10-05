@@ -19,7 +19,7 @@ namespace Bratwurst
 // 'excludeEdges' stops attacks one square before the board edge to help generate
 // the relevant-blockers mask for the Magic struct.
 template<bool sliding = false, bool excludeEdges = false>
-constexpr Bitboard dynamicAttacks(Square s, const std::span<const int[2]>& directions, Bitboard blockers = 0ULL) noexcept
+constexpr Bitboard dynamicAttacks(Square s, const std::span<const int[2]>& directions, Bitboard blockers = 0ULL) 
 {
 	Bitboard attacks = 0ULL;
 
@@ -48,8 +48,11 @@ constexpr Bitboard dynamicAttacks(Square s, const std::span<const int[2]>& direc
 
 // Color irrelevant except for pawn attacks
 template<PieceType pt, Color c = White>
-inline Bitboard attacksBB(Square s, [[maybe_unused]] Bitboard blockers = 0ULL) noexcept
+inline Bitboard attacksBB(Square s, [[maybe_unused]] Bitboard blockers = 0ULL) 
 {
+	static_assert(isValid(c));
+	static_assert(isValid(pt));
+	
 	ASSERT(isValid(s));
 
 	if constexpr (pt == Pawn && c == White) return Precomputed::pseudoAttacks[WhitePawn][s];
@@ -59,7 +62,6 @@ inline Bitboard attacksBB(Square s, [[maybe_unused]] Bitboard blockers = 0ULL) n
 	else if constexpr (pt == Rook) return Precomputed::magics[1][s].attacks(blockers);
 	else if constexpr (pt == Queen) return (attacksBB<Bishop>(s, blockers) | attacksBB<Rook>(s, blockers));
 	else if constexpr (pt == King) return Precomputed::pseudoAttacks[King][s];
-	else static_assert(false, "Unsupported piece type in attacks()");
 }
 
 }

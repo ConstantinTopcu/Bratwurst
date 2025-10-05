@@ -32,44 +32,43 @@ struct Move
 		QueenPromotion = 0b0111
 	};
 
-	constexpr Move(Square src = A1, Square dst = A1, Flag flag = Flag::None) noexcept
+	constexpr Move(Square src = A1, Square dst = A1, Flag flag = Flag::None) 
 		: data(src | (dst << 6) | (flag << 12))	{ }
+	static constexpr Move Null() { return Move(A1, A1, Flag::None); }
+
+	constexpr Square src() const  { return static_cast<Square>(data & 0b111111); }
+	constexpr Square dst() const { return static_cast<Square>((data >> 6) & 0b111111); }
+	constexpr Flag flag() const  { return static_cast<Flag>((data >> 12) & 0b1111); }
+
+	constexpr bool special() const  { return flag() != Flag::None; }
+	constexpr bool enPassant() const  { return flag() == Flag::EnPassant; }
+	constexpr bool castling() const  { return flag() & Flag::CastlingMask; }
+	constexpr bool promotion() const  { return flag() & Flag::PromotionMask; }
 	
-	// Helpers to encode move easly
-	constexpr Square src() const noexcept { return static_cast<Square>(data & 0b111111); }
-	constexpr Square dst() const noexcept{ return static_cast<Square>((data >> 6) & 0b111111); }
-	constexpr Flag flag() const noexcept { return static_cast<Flag>((data >> 12) & 0b1111); }
+	constexpr CastlingSide castlingSide() const;
+	constexpr PieceType promotionType() const;
 
-	constexpr bool special() const noexcept { return flag() != Flag::None; }
-	constexpr bool enPassant() const noexcept { return flag() == Flag::EnPassant; }
-	
-	constexpr bool castling() const noexcept { return flag() & Flag::CastlingMask; }
-	constexpr CastlingSide castlingSide() const noexcept { return static_cast<CastlingSide>(flag() & 1); }
-	
-	constexpr bool promotion() const noexcept { return flag() & Flag::PromotionMask; }
+	inline std::string toString() const { return std::string(squareToString(src()) + squareToString(dst())); }
 
-	constexpr PieceType promotionType() const noexcept
-	{
-		ASSERT(promotion());
-		return static_cast<PieceType>((flag() ^ Flag::PromotionMask) + 1);
-	}
-
-	inline void print() const noexcept
-	{
-		std::cout << toString() << "\n";
-	}
-
-	inline std::string toString() const noexcept
-	{
-		return std::string("[" + squareToString(src()) + "][" + squareToString(dst()) + "][" + std::to_string(static_cast<int>(flag())) + "]");
-	}
-
+private:
 	// The move is packed into 16 bits with the following layout:
-	// [ 0..5 ]  (6 bits)  Source square       (Square::A1 - Square::H8)
-	// [ 6..11]  (6 bits)  Destination square  (Square::A1 - Square::H8)
+	// [ 0..5 ]  (6 bits)  Source square       (A1 - H8)
+	// [ 6..11]  (6 bits)  Destination square  (A1 - H8)
 	// [12..15]  (4 bits)  Flag                (value of Move::Flag enum)
 	uint16 data;
 };
+
+constexpr CastlingSide Move::castlingSide() const
+{
+	ASSERT(castling());
+	return static_cast<CastlingSide>(flag() & 1);
+}
+
+constexpr PieceType Move::promotionType() const
+{ 
+	ASSERT(promotion());
+	return static_cast<PieceType>((flag() ^ Flag::PromotionMask) + 1); 
+}
 
 constexpr size_t MaxMoves = 218;
 using MoveList = StaticVector<Move, MaxMoves>;

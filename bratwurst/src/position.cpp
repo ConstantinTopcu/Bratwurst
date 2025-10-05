@@ -5,7 +5,7 @@
 namespace Bratwurst
 {
 
-void Position::clear() noexcept
+void Position::clear() 
 {
     std::fill(m_pieces, m_pieces + SquareNum, NonePiece);
     std::fill(m_typeBBs, m_typeBBs + PieceTypeNum, 0ULL);
@@ -19,7 +19,7 @@ void Position::clear() noexcept
 /* Parse a chess position from Forsyth-Edwards Notation (FEN)
 * FEN format: "pieces active_color castling en_passant halfmove fullmove"
 * Example: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1" */
-std::expected<Position, Position::FenError> Position::fromFEN(const std::string& fen) noexcept
+std::expected<Position, Position::FenError> Position::fromFEN(const std::string& fen) 
 {
     Position pos;
     pos.clear();
@@ -76,7 +76,6 @@ std::expected<Position, Position::FenError> Position::fromFEN(const std::string&
     pos.m_colorToMove = (parts[1] == "w") ? White : Black;
 
     // parse castling rights 
-    currentStateInfo.castlingRights = 0;
     if (parts[2] != "-")
     {
         for (char right : parts[2])
@@ -84,10 +83,10 @@ std::expected<Position, Position::FenError> Position::fromFEN(const std::string&
             switch (right)
             {
                 // map castling right char to the right mask
-            case 'K': currentStateInfo.castlingRights |= 1 << CastlingRight::WhiteOO; break;
-            case 'Q': currentStateInfo.castlingRights |= 1 << CastlingRight::WhiteOOO; break;
-            case 'k': currentStateInfo.castlingRights |= 1 << CastlingRight::BlackOO; break;
-            case 'q': currentStateInfo.castlingRights |= 1 << CastlingRight::BlackOOO; break;
+            case 'K': currentStateInfo.castlingRights.allowCastling(CastlingRight::WhiteOO); break;
+            case 'Q': currentStateInfo.castlingRights.allowCastling(CastlingRight::WhiteOOO); break;
+            case 'k': currentStateInfo.castlingRights.allowCastling(CastlingRight::BlackOO); break;
+            case 'q': currentStateInfo.castlingRights.allowCastling(CastlingRight::BlackOOO); break;
             default: return std::unexpected(FenError::InvalidCastlingRights);
             }
         }
@@ -123,11 +122,12 @@ std::expected<Position, Position::FenError> Position::fromFEN(const std::string&
 
     pos.updateCheckers();
     pos.updatePinned();
+    pos.updateZobrist();
 
     return pos;
 }
 
-std::string Position::fen() const noexcept
+std::string Position::fen() const 
 {
     std::string fen = "";
 
@@ -165,10 +165,10 @@ std::string Position::fen() const noexcept
     fen += ' ';
     const StateInfo& state = stateInfo();
     std::string castling;
-    if ((state.castlingRights >> CastlingRight::WhiteOO) & 1) castling += 'K';
-    if ((state.castlingRights >> CastlingRight::WhiteOOO) & 1) castling += 'Q';
-    if ((state.castlingRights >> CastlingRight::BlackOO) & 1) castling += 'k';
-    if ((state.castlingRights >> CastlingRight::BlackOOO) & 1) castling += 'q';
+    if (state.castlingRights.canCastle(CastlingRight::WhiteOO)) castling += 'K';
+    if (state.castlingRights.canCastle(CastlingRight::WhiteOOO)) castling += 'Q';
+    if (state.castlingRights.canCastle(CastlingRight::BlackOO)) castling += 'k';
+    if (state.castlingRights.canCastle(CastlingRight::BlackOOO)) castling += 'q';
     fen += castling.empty() ? "-" : castling;
 
     fen += ' ';
@@ -181,10 +181,12 @@ std::string Position::fen() const noexcept
 }
 
 
-void Position::doMove(Move move) noexcept
+void Position::doMove(Move move)
 {
     Square src = move.src();
     Square dst = move.dst();
+
+    const StateInfo prevStateInfo = stateInfo();
 
     Piece srcPiece = m_pieces[src];
     PieceType srcType = pieceTypeOf(srcPiece);
@@ -199,71 +201,88 @@ void Position::doMove(Move move) noexcept
     // Save current state for undo/redo
     StateInfo newStateInfo =
     {
-        .castlingRights = stateInfo().castlingRights,
-        .halfMoveClock = uint8(stateInfo().halfMoveClock + 1),
+        .castlingRights = prevStateInfo.castlingRights,
+        .halfMoveClock = uint8(prevStateInfo.halfMoveClock + 1),
         .enPassantSquare = NoneSquare,
         .capturedPiece = capturedPiece,
-        .prevMove = move
+        .prevMove = move,
+        .zobristKey = prevStateInfo.zobristKey,
     };
-
-
 
     // Handle special cases
     if (isCapture)
     {
-        if (pieceTypeOf(capturedPiece) == King)
-        {
-            DebugBreak();
-        }
+        if (pieceTypeOf(capturedPiece) == King) DebugBreak();
+
         // Remove captured piece from dst
         ASSERT(colorOf(capturedPiece) == enemy);
         ASSERT(pieceTypeOf(capturedPiece) != King);
+
         removePiece(dst, capturedPiece);
+        newStateInfo.zobristKey ^= Zobrist::piece[capturedPiece][dst];
+
     }
     if (move.promotion())
     {
         // Remove pawn and place promoted piece
         ASSERT(srcPiece == makePiece(friendly, Pawn));
         Piece promotionPiece = makePiece(friendly, move.promotionType());
+
         removePiece(src, srcPiece);
+        newStateInfo.zobristKey ^= Zobrist::piece[srcPiece][src];
+
         placePiece(dst, promotionPiece);
+        newStateInfo.zobristKey ^= Zobrist::piece[promotionPiece][dst];
     }
     else if (move.enPassant())
     {
         // Capture pawn behind dst
         Square enemyPawnSquare = dst + ((friendly == White) ? Down : Up);
         Piece enemyPawn = makePiece(enemy, Pawn);
+
         ASSERT(m_pieces[enemyPawnSquare] == enemyPawn);
+
         removePiece(enemyPawnSquare, enemyPawn);
+        newStateInfo.zobristKey ^= Zobrist::piece[enemyPawn][enemyPawnSquare];
     }
     else if (move.castling())
     {
         // Move rook in castling
         CastlingRight right = makeCastlingRight(friendly, move.castlingSide());
         Piece friendlyRook = makePiece(friendly, Rook);
-        Square rookSrc = rookCastlingSources[right];
-        Square rookDst = rookCastlingDestinations[right];
+        Square rookSrc = CastlingRookSrc[right];
+        Square rookDst = CastlingRookDst[right];
+
         ASSERT(srcType == King && capturedPiece == NonePiece);
         ASSERT(m_pieces[rookSrc] == friendlyRook && m_pieces[rookDst] == NonePiece);
+
         movePiece(rookSrc, rookDst, friendlyRook);
+        newStateInfo.zobristKey ^= Zobrist::piece[friendlyRook][rookSrc];
+        newStateInfo.zobristKey ^= Zobrist::piece[friendlyRook][rookDst];
     }
 
     if (!move.promotion())
     {
         movePiece(src, dst, srcPiece);
+        newStateInfo.zobristKey ^= Zobrist::piece[srcPiece][src];
+        newStateInfo.zobristKey ^= Zobrist::piece[srcPiece][dst];
     }
 
     // Update castling rights
     if (srcType == King)
     {
-        newStateInfo.removeCastlingRight(makeCastlingRight(friendly, KingSide));
-        newStateInfo.removeCastlingRight(makeCastlingRight(friendly, QueenSide));
+        newStateInfo.zobristKey ^= Zobrist::castling[newStateInfo.castlingRights.data];
+        newStateInfo.castlingRights.disallowCastling(makeCastlingRight(friendly, KingSide));
+        newStateInfo.castlingRights.disallowCastling(makeCastlingRight(friendly, QueenSide));
+        newStateInfo.zobristKey ^= Zobrist::castling[newStateInfo.castlingRights.data];
     }
     if (srcType == Rook || capturedPiece == makePiece(enemy, Rook))
     {
+        newStateInfo.zobristKey ^= Zobrist::castling[newStateInfo.castlingRights.data];
         Square rookSquare = (srcType == Rook) ? src : dst;
         CastlingRight right = castlingRightByRookSrc(rookSquare);
-        if (isValid(right)) newStateInfo.removeCastlingRight(right);
+        if (isValid(right)) newStateInfo.castlingRights.disallowCastling(right);
+        newStateInfo.zobristKey ^= Zobrist::castling[newStateInfo.castlingRights.data];
     }
 
     if (isCapture)
@@ -271,24 +290,38 @@ void Position::doMove(Move move) noexcept
         newStateInfo.halfMoveClock = 0;
     }
 
+    File epFile = fileOf(prevStateInfo.enPassantSquare);
+    uint64 epZobrist = Zobrist::enPassant[epFile];
+    newStateInfo.zobristKey ^= epZobrist;
+
     // Reset halfmove clock on pawn move or capture
     if (srcType == Pawn)
     {
         newStateInfo.halfMoveClock = 0;
-        Square potentialEnPassantSquare = src + ((friendly == White) ? Up : Down);
-        if (std::abs(int(src) - int(dst)) == 2 * Up) newStateInfo.enPassantSquare = potentialEnPassantSquare;
+        bool doublePawnPush = std::abs(int(src) - int(dst)) == 2 * Up;
+
+        if (doublePawnPush)
+        {
+            Square epSquare = src + pawnPushDir(friendly);
+            newStateInfo.enPassantSquare = epSquare;
+            File epFile = fileOf(epSquare);
+            newStateInfo.zobristKey ^= Zobrist::enPassant[epFile];
+        }
     }
 
     // Increment fullmove counter after Black's move 
     m_fullMoveCounter += friendly;
-    m_colorToMove = ~m_colorToMove;
+
+    m_colorToMove = enemy;
+    newStateInfo.zobristKey ^= Zobrist::side;
+
     m_stateHistory.push_back(newStateInfo);
 
     updateCheckers();
     updatePinned();
 }
 
-void Position::undoMove() noexcept
+void Position::undoMove()
 {
     ASSERT(m_stateHistory.size() > 1);
     const StateInfo& prevStateInfo = stateInfo();
@@ -332,8 +365,8 @@ void Position::undoMove() noexcept
         // Move rook back to original square
         CastlingRight right = makeCastlingRight(friendly, move.castlingSide());
         Piece friendlyRook = makePiece(friendly, Rook);
-        Square rookSrc = rookCastlingSources[right];
-        Square rookDst = rookCastlingDestinations[right];
+        Square rookSrc = CastlingRookSrc[right];
+        Square rookDst = CastlingRookDst[right];
         ASSERT(pieceType == King);
         ASSERT(m_pieces[rookSrc] == NonePiece && m_pieces[rookDst] == friendlyRook);
         movePiece(rookDst, rookSrc, friendlyRook);

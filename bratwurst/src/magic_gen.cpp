@@ -17,6 +17,7 @@ Bitboard findMagicBitboard(Square s, std::span<const int[2]> directions, int max
 	int relevantBlockerCnt = popCnt(blockerMask);
 	int shift = 64 - relevantBlockerCnt;
 
+	// Cache blockers and corresponding attacks
 	size_t attacksCnt = 1ULL << relevantBlockerCnt;
 	using LookupEntry = std::pair<Bitboard, Bitboard>;
 	std::vector<LookupEntry> lookupTable(attacksCnt);
@@ -40,9 +41,11 @@ Bitboard findMagicBitboard(Square s, std::span<const int[2]> directions, int max
 
 	Bitboard* attackTable = new Bitboard[attacksCnt];
 
+	Bitboard magic = 0ULL;
+
 	for (int i = 0; i < maxTries; i++)
 	{
-		Bitboard magic = randomBitboard() & randomBitboard() & randomBitboard();
+		magic = randomBitboard() & randomBitboard() & randomBitboard();
 		std::memset(attackTable, 0ULL, sizeof(Bitboard) * attacksCnt);
 		bool collides = false;
 
@@ -62,13 +65,12 @@ Bitboard findMagicBitboard(Square s, std::span<const int[2]> directions, int max
 
 		if (!collides)
 		{
-			delete[] attackTable;
-			return magic;
 			break;
 		}
 	}
 
-	return 0ULL;
+	delete[] attackTable;
+	return magic;
 }
 
 }
