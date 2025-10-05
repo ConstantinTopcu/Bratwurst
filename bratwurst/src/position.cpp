@@ -10,6 +10,7 @@ void Position::clear()
     std::fill(m_pieces, m_pieces + SquareNum, NonePiece);
     std::fill(m_typeBBs, m_typeBBs + PieceTypeNum, 0ULL);
     std::fill(m_colorBBs, m_colorBBs + ColorNum, 0ULL);
+    std::fill(m_pieceCnt, m_pieceCnt + PieceNum + 1, 0);
 
     while (!m_stateHistory.empty()) m_stateHistory.pop_back();
 
@@ -120,6 +121,7 @@ std::expected<Position, Position::FenError> Position::fromFEN(const std::string&
         return std::unexpected(FenError::InvalidFullMoveCounter);
     }
 
+    pos.updateMaterial();
     pos.updateCheckers();
     pos.updatePinned();
     pos.updateZobrist();
@@ -188,6 +190,11 @@ void Position::doMove(Move move)
 
     const StateInfo prevStateInfo = stateInfo();
 
+    if (prevStateInfo.material[White] < 1000)
+    {
+        DebugBreak();
+    }
+
     Piece srcPiece = m_pieces[src];
     PieceType srcType = pieceTypeOf(srcPiece);
     Color friendly = m_colorToMove;
@@ -207,16 +214,17 @@ void Position::doMove(Move move)
         .capturedPiece = capturedPiece,
         .prevMove = move,
         .zobristKey = prevStateInfo.zobristKey,
+		.material = { prevStateInfo.material[White], prevStateInfo.material[Black] }
     };
 
     // Handle special cases
     if (isCapture)
     {
-        if (pieceTypeOf(capturedPiece) == King) DebugBreak();
-
         // Remove captured piece from dst
         ASSERT(colorOf(capturedPiece) == enemy);
         ASSERT(pieceTypeOf(capturedPiece) != King);
+
+        newStateInfo.material[enemy] -= Evaluation::PieceValue[pieceTypeOf(capturedPiece)];
 
         removePiece(dst, capturedPiece);
         newStateInfo.zobristKey ^= Zobrist::piece[capturedPiece][dst];
@@ -228,9 +236,11 @@ void Position::doMove(Move move)
         ASSERT(srcPiece == makePiece(friendly, Pawn));
         Piece promotionPiece = makePiece(friendly, move.promotionType());
 
+        newStateInfo.material[friendly] -= Evaluation::PieceValue[Pawn];
         removePiece(src, srcPiece);
         newStateInfo.zobristKey ^= Zobrist::piece[srcPiece][src];
 
+        newStateInfo.material[friendly] += Evaluation::PieceValue[promotionPiece];
         placePiece(dst, promotionPiece);
         newStateInfo.zobristKey ^= Zobrist::piece[promotionPiece][dst];
     }
@@ -241,6 +251,8 @@ void Position::doMove(Move move)
         Piece enemyPawn = makePiece(enemy, Pawn);
 
         ASSERT(m_pieces[enemyPawnSquare] == enemyPawn);
+
+        newStateInfo.material[enemy] -= Evaluation::PieceValue[Pawn];
 
         removePiece(enemyPawnSquare, enemyPawn);
         newStateInfo.zobristKey ^= Zobrist::piece[enemyPawn][enemyPawnSquare];

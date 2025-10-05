@@ -2,6 +2,7 @@
 
 #include "core.h"
 
+#include "search/evaluation_constants.h"
 #include "types/castling_right.h"
 #include "types/static_vector.h"
 #include "types/bitboard.h"
@@ -37,7 +38,9 @@ struct StateInfo
 	Bitboard pinned;
 	Bitboard checkers;
 	Zobrist::Key zobristKey;
-	uint16 material[ColorNum];
+
+	// Evaluation related info
+	int material[ColorNum] = { 0 };
 };
 
 class Position
@@ -82,12 +85,15 @@ public:
 	inline Bitboard checkers() const { return stateInfo().checkers; }
 	inline Bitboard pinned() const { return stateInfo().pinned; }
 	inline Bitboard attackers(Square s, Color attackingColor, Bitboard blockers) const;
+	inline uint8 pieceCnt(Piece p) const { return m_pieceCnt[p]; }
+	inline uint16 material(Color c) const { return stateInfo().material[c]; }
 
 	// avoid this function when incremental updates are possible, 
 	// since it recalculates the entire zobrist key from scratch
 	inline void updateZobrist();
 	inline void updateCheckers();
 	inline void updatePinned();
+	inline void updateMaterial();
 
 	[[nodiscard]] inline Color colorToMove() const { return m_colorToMove; }
 	[[nodiscard]] inline uint16 fullMoveCounter() const { return m_fullMoveCounter; }
@@ -107,6 +113,7 @@ private:
 	Color m_colorToMove;
 	uint16 m_fullMoveCounter;
 	StateHistory m_stateHistory;
+	int8 m_pieceCnt[PieceNum + 1] = { 0 };
 
 private:
 	inline void movePiece(Square src, Square dst, Piece srcPiece);
@@ -209,6 +216,18 @@ inline void Position::updatePinned()
 	stateInfo().pinned = pinned;
 }
 
+inline void Position::updateMaterial()
+{
+	stateInfo().material[White] = 0;
+	stateInfo().material[Black] = 0;
+
+	for (Piece p = WhitePawn; p < PieceNum; p++)
+	{
+		Color c = colorOf(p);
+		stateInfo().material[c] += (m_pieceCnt[p]) * Evaluation::PieceValue[p];
+	}
+}
+
 inline void Position::movePiece(Square src, Square dst, Piece srcPiece) 
 {
 	ASSERT(isValid(src) && isValid(dst));
@@ -228,6 +247,8 @@ inline void Position::placePiece(Square s, Piece piece)
 	ASSERT(isValid(piece) && isValid(s));
 	ASSERT(m_pieces[s] == NonePiece);
 
+	m_pieceCnt[piece]++;
+
 	Bitboard mask = squareMask(s);
 	m_colorBBs[colorOf(piece)] |= mask;
 	m_typeBBs[pieceTypeOf(piece)] |= mask;
@@ -239,9 +260,59 @@ inline void Position::removePiece(Square s, Piece piece)
 	ASSERT(isValid(s) && isValid(piece));
 	ASSERT(m_pieces[s] == piece);
 
+	m_pieceCnt[piece]--;
+
 	Bitboard mask = squareMask(s);
 	m_colorBBs[colorOf(piece)] ^= mask;
 	m_typeBBs[pieceTypeOf(piece)] ^= mask;
 	m_pieces[s] = NonePiece;
 }
+
+inline std::ostream& operator<<(std::ostream& os, const Position& pos)
+{
+	os << "  +------------------------+\n";
+	for (int rank = 7; rank >= 0; --rank) // rank 8 down to 1
+	{
+		os << " " << (rank + 1) << " |";
+		for (int file = 0; file < 8; ++file)
+		{
+			Square sq = Square(rank * 8 + file);
+			Piece piece = pos.pieceOn(sq);
+
+			char symbol = '.';
+			if (piece != NonePiece)
+			{
+				PieceType pt = pieceTypeOf(piece);
+				Color c = colorOf(piece);
+
+				switch (pt)
+				{
+				case Pawn:   symbol = 'p'; break;
+				case Knight: symbol = 'n'; break;
+				case Bishop: symbol = 'b'; break;
+				case Rook:   symbol = 'r'; break;
+				case Queen:  symbol = 'q'; break;
+				case King:   symbol = 'k'; break;
+				default:     symbol = '?'; break;
+				}
+
+				if (c == White)
+					symbol = static_cast<char>(std::toupper(symbol));
+			}
+
+			os << " " << symbol;
+		}
+		os << " |\n";
+	}
+	os << "  +------------------------+\n";
+	os << "    a b c d e f g h\n";
+
+	// Extra info
+	os << "To move: " << (pos.colorToMove() == White ? "White" : "Black") << "\n";
+	os << "Halfmove clock: " << pos.halfmoveClock() << "\n";
+	os << "Fullmove counter: " << pos.fullMoveCounter() << "\n";
+
+	return os;
+}
+
 } 

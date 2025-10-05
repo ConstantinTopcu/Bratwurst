@@ -1,8 +1,10 @@
 #include <precomputed.h>
 #include <zobrist.h>
-#include <perft.h>
+#include <position.h>
 
 #include <iostream>
+
+#include <search/search.h>
 
 using namespace Bratwurst;
 
@@ -11,9 +13,24 @@ int main(char argc, char* argv[])
 	Precomputed::init();
 	Zobrist::init();
 
-	Position pos = Position::fromFEN("r2q1n1k/pppb1ppp/2n5/7Q/8/2P5/PP1P2PP/KB2RR2 w - - 0 1").value();
-	size_t perftResult = Perft::perft(pos, 6, true);
-	std::cout << "Total Nodes: " << perftResult << std::endl;
+	Position pos = Position::fromFEN().value();
+
+	for (int i = 0; i < 20; i++)
+	{
+		auto result = Search::search(pos, 6);
+		Move bestMove = result.bestMove;
+		pos.doMove(bestMove);
+
+		std::cout << "[Search Info]"
+			<< " bestMove: " << result.bestMove.toString()
+			<< " | Eval: " << result.eval
+			<< " | Time: " << result.timeNS/1000000 << "ms"
+			<< " | Nodes: " << result.nodes
+			<< " | NPS: " << std::fixed << result.nps
+			<< std::endl;
+
+		std::cout << pos << std::endl;
+	}
 
 	Precomputed::cleanup();
 }

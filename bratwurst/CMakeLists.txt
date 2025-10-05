@@ -14,6 +14,7 @@ add_library(BratwurstEngine STATIC
     "src/magic_gen.cpp"
     "include/move_gen.h" 
     "src/move_gen.cpp"
- "include/perft.h" "include/zobrist.h")
+    "src/search.cpp" 
+    "src/evaluate.cpp" "include/search/evaluation_constants.h")
 
 target_include_directories(BratwurstEngine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
