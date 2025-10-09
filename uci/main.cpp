@@ -15,11 +15,16 @@ int main(char argc, char* argv[])
 
 	Position pos = Position::fromFEN().value();
 
-	for (int i = 0; i < 20; i++)
+	for (int i = 0; i < 100; i++)
 	{
 		auto result = Search::search(pos, 6);
 		Move bestMove = result.bestMove;
 		pos.doMove(bestMove);
+		
+		std::cout << "[Material Info]" << " White: " << pos.material(White)
+			<< " | Black: " << pos.material(Black)
+			<< " | Diff: " << pos.material(White) - pos.material(Black)
+			<< std::endl;
 
 		std::cout << "[Search Info]"
 			<< " bestMove: " << result.bestMove.toString()

@@ -190,11 +190,6 @@ void Position::doMove(Move move)
 
     const StateInfo prevStateInfo = stateInfo();
 
-    if (prevStateInfo.material[White] < 1000)
-    {
-        DebugBreak();
-    }
-
     Piece srcPiece = m_pieces[src];
     PieceType srcType = pieceTypeOf(srcPiece);
     Color friendly = m_colorToMove;

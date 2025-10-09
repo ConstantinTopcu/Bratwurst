@@ -10,7 +10,7 @@ template<typename T, size_t N>
 class StaticVector
 {
 public:
-    constexpr StaticVector() : m_size(0) {}
+    constexpr StaticVector(int size = 0) : m_size(size) {}
 
     constexpr void push_back(const T& value) 
     {

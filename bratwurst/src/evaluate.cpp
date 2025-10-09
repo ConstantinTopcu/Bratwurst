@@ -55,16 +55,8 @@ int evaluate(Position& pos)
 
 		if (p != NonePiece)
 		{
-			if (colorOf(p) == White)
-			{
-				mgScore += PieceSquareTable[p][0][s];
-				egScore += PieceSquareTable[p][1][s];
-			}
-			else
-			{
-				mgScore -= PieceSquareTable[p][0][s];
-				egScore -= PieceSquareTable[p][1][s];
-			}
+			mgScore += PieceSquareTable[p][0][s];
+			egScore += PieceSquareTable[p][1][s];
 		}
 	}
 
