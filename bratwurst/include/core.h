@@ -66,6 +66,7 @@
 
 namespace Bratwurst
 {
+
 using int8 = std::int8_t;
 using int16 = std::int16_t;
 using int32 = std::int32_t;
@@ -77,4 +78,5 @@ using uint32 = std::uint32_t;
 using uint64 = std::uint64_t;
 
 using byte = uint8;
+
 }

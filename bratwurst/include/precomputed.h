@@ -46,6 +46,7 @@ extern Bitboard pseudoAttacks[PieceTypeNum + 1][SquareNum];
 // If s1 and s2 do not align, the bitboard is set to 0ULL.
 extern Bitboard lineBBs[2][SquareNum][SquareNum];
 
-void init() ;
-void cleanup() ;
+void init();
+void cleanup();
+
 }

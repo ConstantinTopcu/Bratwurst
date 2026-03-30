@@ -3,6 +3,8 @@
 
 #include <types/bitboard.h>
 
+// Partially unnecessary
+
 using namespace Bratwurst;
 
 TEST_CASE("Bitboard squareMask") 

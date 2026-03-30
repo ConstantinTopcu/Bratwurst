@@ -1,9 +1,9 @@
 #pragma once
 
-#include "core.h"
+#include <core.h>
 
-#include "types/bitboard.h"
-#include "types/square.h"
+#include <types/bitboard.h>
+#include <types/square.h>
 
 #include <span>
 

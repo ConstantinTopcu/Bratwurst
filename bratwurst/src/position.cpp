@@ -42,7 +42,7 @@ std::expected<Position, Position::FenError> Position::fromFEN(const std::string&
     // parse pieces
     for (char c : parts[0])
     {
-        if (c <= '8' && c > '0')
+        if (c >= '1' && c <= '8')
         {
             // skip squares if digit from 0-8
             int skip = c - '0';
@@ -78,17 +78,11 @@ std::expected<Position, Position::FenError> Position::fromFEN(const std::string&
     // parse castling rights 
     if (parts[2] != "-")
     {
-        for (char right : parts[2])
+        for (char c : parts[2])
         {
-            switch (right)
-            {
-                // map castling right char to the right mask
-            case 'K': currentStateInfo.castlingRights.allowCastling(CastlingRight::WhiteOO); break;
-            case 'Q': currentStateInfo.castlingRights.allowCastling(CastlingRight::WhiteOOO); break;
-            case 'k': currentStateInfo.castlingRights.allowCastling(CastlingRight::BlackOO); break;
-            case 'q': currentStateInfo.castlingRights.allowCastling(CastlingRight::BlackOOO); break;
-            default: return std::unexpected(FenError::InvalidCastlingRights);
-            }
+            CastlingRight right = charToCastlingRight(c);
+            if (right == CastlingRightNone) return std::unexpected(FenError::InvalidCastlingRights);
+            currentStateInfo.castlingRights.allowCastling(right);
         }
     }
 
@@ -112,7 +106,7 @@ std::expected<Position, Position::FenError> Position::fromFEN(const std::string&
     try
     {
         int fullmoveCounter = std::stoi(parts[5]);
-        if (fullmoveCounter < 0) return std::unexpected(FenError::InvalidFullMoveCounter);
+        if (fullmoveCounter < 1) return std::unexpected(FenError::InvalidFullMoveCounter);
         pos.m_fullMoveCounter = fullmoveCounter;
     }
     catch (const std::invalid_argument& e)
@@ -122,14 +116,15 @@ std::expected<Position, Position::FenError> Position::fromFEN(const std::string&
 
     pos.updateCheckers();
     pos.updatePinned();
-    pos.updateZobrist();
+    pos.initZobrist();
 
     return pos;
 }
 
 std::string Position::fen() const 
 {
-    std::string fen = "";
+    std::string fen;
+    fen.reserve(100);
 
     for (Rank r = Rank8; isValid(r); r--)
     {
@@ -165,6 +160,7 @@ std::string Position::fen() const
     fen += ' ';
     const StateInfo& state = stateInfo();
     std::string castling;
+
     if (state.castlingRights.canCastle(CastlingRight::WhiteOO)) castling += 'K';
     if (state.castlingRights.canCastle(CastlingRight::WhiteOOO)) castling += 'Q';
     if (state.castlingRights.canCastle(CastlingRight::BlackOO)) castling += 'k';
@@ -212,27 +208,27 @@ void Position::doMove(Move move)
     // Handle special cases
     if (isCapture)
     {
-        if (pieceTypeOf(capturedPiece) == King) DebugBreak();
-
-        // Remove captured piece from dst
         ASSERT(colorOf(capturedPiece) == enemy);
         ASSERT(pieceTypeOf(capturedPiece) != King);
 
+        // Remove captured piece from dst and update zobrist + halfmove clock
         removePiece(dst, capturedPiece);
         newStateInfo.zobristKey ^= Zobrist::piece[capturedPiece][dst];
+        newStateInfo.halfMoveClock = 0;
 
     }
     if (move.promotion())
     {
-        // Remove pawn and place promoted piece
+        // Remove pawn, place promotion piece and update zobrist key
         ASSERT(srcPiece == makePiece(friendly, Pawn));
+
         Piece promotionPiece = makePiece(friendly, move.promotionType());
-
-        removePiece(src, srcPiece);
         newStateInfo.zobristKey ^= Zobrist::piece[srcPiece][src];
-
-        placePiece(dst, promotionPiece);
         newStateInfo.zobristKey ^= Zobrist::piece[promotionPiece][dst];
+        
+        removePiece(src, srcPiece);
+        placePiece(dst, promotionPiece);
+
     }
     else if (move.enPassant())
     {
@@ -261,6 +257,7 @@ void Position::doMove(Move move)
         newStateInfo.zobristKey ^= Zobrist::piece[friendlyRook][rookDst];
     }
 
+    // move piece normally
     if (!move.promotion())
     {
         movePiece(src, dst, srcPiece);
@@ -285,16 +282,12 @@ void Position::doMove(Move move)
         newStateInfo.zobristKey ^= Zobrist::castling[newStateInfo.castlingRights.data];
     }
 
-    if (isCapture)
-    {
-        newStateInfo.halfMoveClock = 0;
-    }
-
+    // remove previous epSquare from zobrist key
     File epFile = fileOf(prevStateInfo.enPassantSquare);
     uint64 epZobrist = Zobrist::enPassant[epFile];
     newStateInfo.zobristKey ^= epZobrist;
 
-    // Reset halfmove clock on pawn move or capture
+    // Reset halfmove clock on pawn move nad handle ep
     if (srcType == Pawn)
     {
         newStateInfo.halfMoveClock = 0;

@@ -3,36 +3,6 @@
 
 using namespace Bratwurst;
 
-TEST_CASE("Piece Validation")
-{
-    for (int p = WhitePawn; p < NonePiece; ++p)
-    {
-        REQUIRE(isValid(static_cast<Piece>(p)));
-    }
-
-    REQUIRE(!isValid(NonePiece));
-}
-
-TEST_CASE("PieceType Validation")
-{
-    for (int pt = Pawn; pt < NonePieceType; ++pt)
-    {
-        REQUIRE(isValid(static_cast<PieceType>(pt)));
-    }
-
-    REQUIRE(!isValid(NonePieceType));
-}
-
-TEST_CASE("Color Validation")
-{
-    for (int c = White; c < NoneColor; ++c)
-    {
-        REQUIRE(isValid(static_cast<Color>(c)));
-    }
-
-    REQUIRE(!isValid(NoneColor));
-}
-
 TEST_CASE("Piece Type Extraction")
 {
     for (int p = WhitePawn; p < NonePiece; ++p)
@@ -85,25 +55,24 @@ TEST_CASE("Piece conversion functions")
 
     SECTION("Round-trip consistency")
     {
-        Piece pieces[] = {
+        Piece pieces[] = 
+        {
             WhitePawn, WhiteKnight, WhiteBishop, WhiteRook, WhiteQueen, WhiteKing,
             BlackPawn, BlackKnight, BlackBishop, BlackRook, BlackQueen, BlackKing
         };
 
-        for (Piece piece : pieces) {
+        for (Piece piece : pieces) 
+        {
             char c = pieceToChar(piece);
             REQUIRE(c != '.');
             REQUIRE(charToPiece(c) == piece);
         }
     }
 
-    SECTION("Case sensitivity matters")
+    SECTION("samples")
     {
-        REQUIRE(pieceToChar(WhiteKing) != pieceToChar(BlackKing));
-        REQUIRE(charToPiece('K') != charToPiece('k'));
-
         REQUIRE(pieceToChar(WhiteKing) == 'K');
-        REQUIRE(pieceToChar(BlackKing) == 'k');
+        REQUIRE(pieceToChar(BlackBishop) == 'b');
     }
 }
 

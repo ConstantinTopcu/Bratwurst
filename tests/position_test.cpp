@@ -13,9 +13,9 @@ struct PrecomputedFixture
 // Register fixture so it runs once
 static PrecomputedFixture globalPrecomputed;
 
-TEST_CASE("check valid fens")
+TEST_CASE("check valid FENs")
 {
-    std::string validFens[] =
+    std::string validFens[10] =
     {
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b - - 0 1",
@@ -31,16 +31,15 @@ TEST_CASE("check valid fens")
 
     for (const std::string& validFen : validFens)
     {
-        INFO("Testing valid FEN: " << validFen);
         auto result = Position::fromFEN(validFen);
         REQUIRE(result.has_value());
         REQUIRE(validFen == result->fen());
     }
 }
 
-TEST_CASE("check invalid fens")
+TEST_CASE("check invalid FENs")
 {
-    std::vector<std::pair<std::string, Position::FenError>> invalidFens =
+    std::pair<std::string, Position::FenError> invalidFens[10] =
     {
         {"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w - - 0", Position::FenError::InvalidFormat},
         {"9/8/8/8/8/8/8/8 w - - 0 1", Position::FenError::InvalidPiecePlacement},
@@ -56,7 +55,6 @@ TEST_CASE("check invalid fens")
 
     for (const auto& [fen, error] : invalidFens)
     {
-        INFO("Testing invalid FEN: " << fen);
         auto result = Position::fromFEN(fen);
         REQUIRE_FALSE(result.has_value());
         REQUIRE(result.error() == error);
@@ -70,38 +68,23 @@ TEST_CASE("check doMove/undoMove consistency")
 
     Move moves[] =
     {
-        Move(E2, E4),
-        Move(E7, E5),
-        Move(G1, F3),
-        Move(G8, G6),
-        Move(F1, E2),
-        Move(F8, E7),
+        Move(E2, E4), Move(E7, E5), Move(G1, F3),
+        Move(G8, G6), Move(F1, E2),Move(F8, E7),
         Move(E1, G1, Move::Flag::CastlingOO),
         Move(E8, G8, Move::Flag::CastlingOO),
-        Move(D2, D4),
-        Move(E5, D4), // black captures d4
-        Move(C2, C4),
+        Move(D2, D4), Move(E5, D4), Move(C2, C4),
         Move(D4, C3, Move::Flag::EnPassant),
-        Move(B2, B4),
-        Move(C7, C5),
-        Move(B4, C5),
-        Move(B7, B6),
-        Move(C5, B6),
-        Move(H7, H6),
-        Move(B6, B7),
-        Move(B8, C6),
-        Move(B7, A8, Move::Flag::QueenPromotion)
+        Move(B2, B4), Move(C7, C5), Move(B4, C5), 
+        Move(B7, B6), Move(C5, B6), Move(H7, H6),
+        Move(B6, B7), Move(B8, C6), Move(B7, A8, 
+        Move::Flag::QueenPromotion)
     };
 
-    for (auto m : moves)
-    {
+    for (auto m : moves) 
         pos.doMove(m);
-    }
-
-    for (auto m : moves)
-    {
+    
+    for (auto m : moves) 
         pos.undoMove();
-    }
 
     REQUIRE(Position::StartPosFEN == pos.fen());
 }

@@ -12,19 +12,19 @@ namespace Bratwurst
 
 enum CastlingSide
 {
-	KingSide,
-	QueenSide,
+	KingSide	= 0,
+	QueenSide	= 1,
 	CastlingSideNum = 2
 };
 
 enum CastlingRight
 {
-	WhiteOO,
-	WhiteOOO,
-	BlackOO,
-	BlackOOO,
+	WhiteOO		= 0,
+	WhiteOOO	= 1,
+	BlackOO		= 2,
+	BlackOOO	= 3,
 
-	CastlingRightNone,
+	CastlingRightNone = 4,
 	CastlingRightNum = 4
 };
 
@@ -32,6 +32,7 @@ constexpr bool isValid(CastlingRight right)
 {
 	return right < CastlingRightNone;
 }
+
 constexpr CastlingRight makeCastlingRight(Color c, CastlingSide side)
 {
 	ASSERT(isValid(c));
@@ -55,11 +56,12 @@ class CastlingRights
 public:
 	constexpr CastlingRights() : data(0) {}
 
-	//template<typename... Rights>
-	//constexpr CastlingRights(Rights... rights) : data(((1 << static_cast<int>(rights)) | ...))
-	//{ 
-	//	//static_assert((std::is_same_v<Rights, CastlingRight>) && ...); 
-	//}
+	template<typename... Rights>
+	constexpr CastlingRights(CastlingRight right, Rights... rights)
+		: data((1 << static_cast<int>(right)) | ((1 << static_cast<int>(rights)) | ...))
+	{
+		static_assert((std::is_same_v<Rights, CastlingRight> && ...));
+	}
 
 	constexpr bool canCastle(CastlingRight right) const { return data & (1 << right); }
 	constexpr void allowCastling(CastlingRight right) {	data |= (1 << right); }
@@ -68,8 +70,35 @@ public:
 	constexpr void allowCastling(Color c, CastlingSide side) { data |= (1 << makeCastlingRight(c, side)); }
 	constexpr void disallowCastling(Color c, CastlingSide side)	{ data &= ~(1 << makeCastlingRight(c, side)); }
 
+public:
 	uint8 data;
 };
+
+constexpr CastlingRight charToCastlingRight(char right)
+{
+	switch (right)
+	{
+	case 'K': return CastlingRight::WhiteOO;
+	case 'Q': return CastlingRight::WhiteOOO;
+	case 'k': return CastlingRight::BlackOO;
+	case 'q': return CastlingRight::BlackOOO;
+	}
+
+	return CastlingRightNone;
+}
+
+constexpr char castlingRightToChar(CastlingRight right)
+{
+	switch (right)
+	{
+	case CastlingRight::WhiteOO: return 'K';
+	case CastlingRight::WhiteOOO: return 'Q';
+	case CastlingRight::BlackOO: return 'k';
+	case CastlingRight::BlackOOO: return 'q';
+	}
+
+	return '-';
+}
 
 constexpr Square CastlingRookSrc[CastlingRightNum] = { H1, A1, H8, A8 };
 constexpr Square CastlingRookDst[CastlingRightNum] = { F1, D1, F8, D8 };

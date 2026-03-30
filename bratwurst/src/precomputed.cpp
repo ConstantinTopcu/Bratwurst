@@ -14,7 +14,7 @@ namespace Bratwurst::Precomputed
 Magic magics[2][SquareNum];
 Bitboard pseudoAttacks[PieceTypeNum + 1][SquareNum];
 Bitboard lineBBs[2][SquareNum][SquareNum];
-static std::atomic_bool initialized = false;
+static bool initialized = false;
 
 // piece offsets
 constexpr int whitePawnOffsets[2][2] = { {-1, 1}, {1, 1} };
@@ -63,7 +63,7 @@ Magic initMagic(Square s, std::span<const int[2]> directions, Bitboard magicBB)
 
 	size_t attacksCnt = 1ULL << relevantBlockerCnt;
 	magic.attacksTable = new Bitboard[attacksCnt];
-	std::memset(magic.attacksTable, 0ULL, sizeof(Bitboard) * attacksCnt);
+	std::fill_n(magic.attacksTable, attacksCnt, 0ULL);
 
 	for (size_t i = 0; i < attacksCnt; i++)
 	{
@@ -74,15 +74,15 @@ Magic initMagic(Square s, std::span<const int[2]> directions, Bitboard magicBB)
 
 		while (tempMask)
 		{
-			Square s = popLsb(tempMask);
-			occupancy |= (tempI & 1) << s;
+			Square sq = popLsb(tempMask);
+			occupancy |= (tempI & 1) << sq;
 			tempI >>= 1;
 		}
 
 		Bitboard attacks = dynamicAttacks<true, false>(s, directions, occupancy);
 		size_t index = magic.index(occupancy);
 
-		ASSERT(magic.attacksTable[index] == 0ULL | magic.attacksTable[index] == attacks);
+		ASSERT(magic.attacksTable[index] == 0ULL || magic.attacksTable[index] == attacks);
 
 		magic.attacksTable[index] = attacks;
 	}
@@ -127,8 +127,8 @@ void init()
 				PieceType pt = isDiagonal ? Bishop : Rook;
 
 				lineBBs[0][s][s2] = (pseudoAttacks[pt][s] & pseudoAttacks[pt][s2]) | squareMask(s) | squareMask(s2);
-				lineBBs[1][s][s2] = ((isDiagonal) ?
-					attacksBB<Bishop>(s, squareMask(s2)) & attacksBB<Bishop>(s2, squareMask(s)) :
+				lineBBs[1][s][s2] = ((isDiagonal) ? 
+					attacksBB<Bishop>(s, squareMask(s2)) & attacksBB<Bishop>(s2, squareMask(s)) : 
 					attacksBB<Rook>(s, squareMask(s2)) & attacksBB<Rook>(s2, squareMask(s)));
 			}
 		}
@@ -136,7 +136,11 @@ void init()
 
 	auto end = clock::now();
 	std::chrono::duration<double, std::milli> duration = end - start;
+
+#ifdef BUILD_DEBUG
 	std::cout << "time to initialize: " << duration << std::endl;
+#endif
+	
 	initialized = true;
 }
 

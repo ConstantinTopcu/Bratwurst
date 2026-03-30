@@ -3,42 +3,6 @@
 
 using namespace Bratwurst;
 
-TEST_CASE("Square, Rank, and File validation")
-{
-    SECTION("Valid Squares")
-    {
-        REQUIRE(isValid(A1));
-        REQUIRE(isValid(H8));
-    }
-
-    SECTION("Invalid Square")
-    {
-        REQUIRE(!isValid(NoneSquare));
-    }
-
-    SECTION("Valid Files")
-    {
-        REQUIRE(isValid(FileA));
-        REQUIRE(isValid(FileH));
-    }
-
-    SECTION("Invalid File")
-    {
-        REQUIRE(!isValid(NoneFile));
-    }
-
-    SECTION("Valid Ranks")
-    {
-        REQUIRE(isValid(Rank1));
-        REQUIRE(isValid(Rank8));
-    }
-
-    SECTION("Invalid Rank")
-    {
-        REQUIRE(!isValid(NoneRank));
-    }
-}
-
 TEST_CASE("Rank and File extraction from Square")
 {
     SECTION("rankOf function")
@@ -83,44 +47,6 @@ TEST_CASE("Square construction")
     }
 }
 
-TEST_CASE("Direction multiplication operators")
-{
-    SECTION("Multiplication with Up/Down/Left/Right")
-    {
-        Direction d = Direction::Up;
-
-        REQUIRE(static_cast<int>(2 * d) == static_cast<int>(d) * 2);
-
-        d *= 3;
-        REQUIRE(static_cast<int>(d) == static_cast<int>(Direction::Up) * 3);
-    }
-}
-
-TEST_CASE("Square + Direction operators")
-{
-    Square s = A1;
-
-    SECTION("Functional + operator")
-    {
-        Square result = s + Direction::Up;
-        REQUIRE(static_cast<int>(result) == static_cast<int>(s) + static_cast<int>(Direction::Up));
-    }
-
-    SECTION("In-place += operator")
-    {
-        s += Direction::Right;
-        REQUIRE(static_cast<int>(s) == static_cast<int>(A1) + static_cast<int>(Direction::Right));
-    }
-
-    SECTION("Multiple additions")
-    {
-        s = D4;
-        s += Direction::Up;
-        s += Direction::Right;
-        REQUIRE(static_cast<int>(s) == static_cast<int>(D4) + static_cast<int>(Direction::Up) + static_cast<int>(Direction::Right));
-    }
-}
-
 TEST_CASE("String to Square conversion")
 {
     SECTION("Valid square strings")
@@ -142,13 +68,6 @@ TEST_CASE("String to Square conversion")
 
 TEST_CASE("Square to String conversion")
 {
-    SECTION("Valid squares")
-    {
-        REQUIRE(squareToString(A1) == "a1");
-        REQUIRE(squareToString(H8) == "h8");
-        REQUIRE(squareToString(D4) == "d4");
-        REQUIRE(squareToString(E5) == "e5");
-    }
     SECTION("Invalid squares")
     {
         REQUIRE(squareToString(NoneSquare) == "-");

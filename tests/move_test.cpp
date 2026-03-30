@@ -1,6 +1,8 @@
 #include <catch2/catch_all.hpp>
 #include <types/move.h>
 
+// Partially unnecessary
+
 using namespace Bratwurst;
 
 TEST_CASE("Move creation and field access", "[move]")

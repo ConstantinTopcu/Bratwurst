@@ -1,16 +1,16 @@
 #pragma once
 
-#include "core.h"
+#include <core.h>
 
-#include "types/castling_right.h"
-#include "types/static_vector.h"
-#include "types/bitboard.h"
-#include "types/square.h"
-#include "types/piece.h"
-#include "types/move.h"
+#include <types/castling_right.h>
+#include <types/static_vector.h>
+#include <types/bitboard.h>
+#include <types/square.h>
+#include <types/piece.h>
+#include <types/move.h>
 
-#include "zobrist.h"
-#include "attacks.h"
+#include <zobrist.h>
+#include <attacks.h>
 
 #include <expected>
 #include <string_view>
@@ -70,6 +70,12 @@ public:
 	void undoMove();
 	void clear();
 
+	// avoid this function when incremental, manual updates are possible, 
+	// since it recalculates the entire zobrist key from scratch
+	inline void initZobrist();
+	inline void updateCheckers();
+	inline void updatePinned();
+
 	template<typename... PieceTypes>
 	[[nodiscard]] inline Bitboard typeBB(PieceTypes... types) const;
 	[[nodiscard]] inline Bitboard colorBB(Color c) const;
@@ -82,12 +88,6 @@ public:
 	inline Bitboard checkers() const { return stateInfo().checkers; }
 	inline Bitboard pinned() const { return stateInfo().pinned; }
 	inline Bitboard attackers(Square s, Color attackingColor, Bitboard blockers) const;
-
-	// avoid this function when incremental updates are possible, 
-	// since it recalculates the entire zobrist key from scratch
-	inline void updateZobrist();
-	inline void updateCheckers();
-	inline void updatePinned();
 
 	[[nodiscard]] inline Color colorToMove() const { return m_colorToMove; }
 	[[nodiscard]] inline uint16 fullMoveCounter() const { return m_fullMoveCounter; }
@@ -109,6 +109,7 @@ private:
 	StateHistory m_stateHistory;
 
 private:
+	// due to performance these 3 functions don't check for required absence or presence of pieces internally
 	inline void movePiece(Square src, Square dst, Piece srcPiece);
 	inline void placePiece(Square s, Piece piece);
 	inline void removePiece(Square s, Piece piece);
@@ -164,7 +165,7 @@ inline void Position::updateCheckers()
 	stateInfo().checkers = attackers(kingSquare(m_colorToMove), ~m_colorToMove, occupancyBB());
 }
 
-inline void Position::updateZobrist()
+inline void Position::initZobrist()
 {
 	Zobrist::Key zobrist = 0ULL;
 

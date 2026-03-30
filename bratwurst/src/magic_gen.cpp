@@ -7,6 +7,7 @@
 #include <vector>
 
 // This File is not included in the build and is only for creating precomputed magic bitboards
+// Due to time cost of this algorithm, the 128 precomputed Magic Bitboards are just stored inside an array
 namespace Bratwurst::MagicGenerator
 {
 

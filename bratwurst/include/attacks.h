@@ -19,7 +19,7 @@ namespace Bratwurst
 // 'excludeEdges' stops attacks one square before the board edge to help generate
 // the relevant-blockers mask for the Magic struct.
 template<bool sliding = false, bool excludeEdges = false>
-constexpr Bitboard dynamicAttacks(Square s, const std::span<const int[2]>& directions, Bitboard blockers = 0ULL) 
+constexpr Bitboard dynamicAttacks(Square s, const std::span<const int[2]> directions, Bitboard blockers = 0ULL)
 {
 	Bitboard attacks = 0ULL;
 
@@ -50,8 +50,7 @@ constexpr Bitboard dynamicAttacks(Square s, const std::span<const int[2]>& direc
 template<PieceType pt, Color c = White>
 inline Bitboard attacksBB(Square s, [[maybe_unused]] Bitboard blockers = 0ULL) 
 {
-	static_assert(isValid(c));
-	static_assert(isValid(pt));
+	static_assert(isValid(c) && isValid(pt));
 	
 	ASSERT(isValid(s));
 
