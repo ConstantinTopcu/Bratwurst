@@ -1,9 +1,10 @@
 #pragma once
 
-#include "core.h"
-#include "piece.h"
-#include "square.h"
-#include "bitboard.h"
+#include <engine/core/core.h>
+
+#include <engine/types/piece.h>
+#include <engine/types/square.h>
+#include <engine/types/bitboard.h>
 
 #include <type_traits>
 
@@ -47,8 +48,8 @@ constexpr CastlingRight castlingRightByRookSrc(Square s)
 	case H1: return WhiteOO;
 	case A8: return BlackOOO;
 	case H8: return BlackOO;
-	default: return CastlingRightNone;
 	}
+	return CastlingRightNone;
 }
 
 class CastlingRights

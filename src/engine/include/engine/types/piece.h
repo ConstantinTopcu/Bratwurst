@@ -1,8 +1,8 @@
 #pragma once
 
-#include "core.h"
-#include "enum_ops.h"
-#include "square.h"
+#include <engine/core/core.h>
+#include <engine/types/enum_ops.h>
+#include <engine/types/square.h>
 
 namespace Bratwurst
 {

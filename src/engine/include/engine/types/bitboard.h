@@ -1,7 +1,7 @@
 #pragma once
 
-#include "core.h"
-#include "square.h"
+#include <engine/core/core.h>
+#include <engine/types/square.h>
 
 #include <random>
 #ifdef COMPILER_MSVC

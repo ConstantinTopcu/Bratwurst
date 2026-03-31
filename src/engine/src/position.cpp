@@ -1,4 +1,6 @@
-#include "position.h"
+#include <engine/position/position.h>
+
+#include <engine/move_gen/attacks.h>
 
 #include <ranges>
 
@@ -176,6 +178,34 @@ std::string Position::fen() const
     return fen;
 }
 
+void Position::updatePinned()
+{
+    Color friendly = m_colorToMove;
+    Color enemy = ~friendly;
+    Square kingSq = kingSquare(friendly);
+    Bitboard friendlyPieces = colorBB(friendly);
+    Bitboard enemyPieces = colorBB(enemy);
+    Bitboard occupancy = friendlyPieces | enemyPieces;
+
+    Bitboard potentialPinned = attacksBB<Queen>(kingSq, occupancy) & friendlyPieces;
+    occupancy ^= potentialPinned;
+
+    Bitboard rooks = typeBB(Rook, Queen) & enemyPieces;
+    Bitboard bishops = typeBB(Bishop, Queen) & enemyPieces;
+    Bitboard XRayRookAttacks = attacksBB<Rook>(kingSq, occupancy);
+    Bitboard XRayBishopAttacks = attacksBB<Bishop>(kingSq, occupancy);
+    Bitboard pinners = (XRayRookAttacks & rooks) | (XRayBishopAttacks & bishops);
+
+    Bitboard pinned = 0ULL;
+
+    while (pinners)
+    {
+        Square pinner = popLsb(pinners);
+        pinned |= (Precomputed::lineBBs[1][kingSq][pinner] & friendlyPieces);
+    }
+
+    stateInfo().pinned = pinned;
+}
 
 void Position::doMove(Move move)
 {

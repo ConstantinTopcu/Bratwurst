@@ -1,5 +1,5 @@
 #include <catch2/catch_all.hpp>
-#include <types/square.h>
+#include <engine/types/square.h>
 
 using namespace Bratwurst;
 

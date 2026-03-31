@@ -1,10 +1,10 @@
 #pragma once
 
-#include "core.h"
+#include <engine/core/core.h>
 
-#include "types/bitboard.h"
-#include "types/piece.h"
-#include "types/square.h"
+#include <engine/types/bitboard.h>
+#include <engine/types/piece.h>
+#include <engine/types/square.h>
 
 namespace Bratwurst::Zobrist
 {
@@ -25,10 +25,14 @@ namespace Bratwurst::Zobrist
         }
 
         for (int i = 0; i < 16; ++i)
+        {
             castling[i] = randomBitboard();
+        }
 
         for (File f = FileA; f < FileNum; f++)
+        {
             enPassant[f] = randomBitboard();
+        }
 
         enPassant[NoneFile] = 0ULL;
 

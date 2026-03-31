@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core.h"
+#include <engine/core/core.h>
 
 namespace Bratwurst
 {

@@ -1,10 +1,8 @@
 #pragma once
 
-#include "magic_gen.h"
-#include "precomputed.h"
-#include "attacks.h"
-
-#include <vector>
+#include <engine/move_gen/magic_gen.h>
+#include <engine/move_gen/precomputed.h>
+#include <engine/move_gen/attacks.h>
 
 // This File is not included in the build and is only for creating precomputed magic bitboards
 // Due to time cost of this algorithm, the 128 precomputed Magic Bitboards are just stored inside an array

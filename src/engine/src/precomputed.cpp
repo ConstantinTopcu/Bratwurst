@@ -1,11 +1,11 @@
-#include "precomputed.h"
-#include "attacks.h"
+#include <engine/move_gen/move_gen.h>
+#include <engine/move_gen/attacks.h>
+#include <engine/move_gen/magic_gen.h>
 
-#include "magic_gen.h"
-
-#include <atomic>
-#include <chrono>
+#ifdef BUILD_DEBUG
 #include <iostream>
+#include <chrono>
+#endif
 
 namespace Bratwurst::Precomputed
 {
@@ -95,8 +95,10 @@ void init()
 {
 	if (initialized) return;
 
+#ifdef BUILD_DEBUG
 	using clock = std::chrono::high_resolution_clock;
 	auto start = clock::now();
+#endif
 
 	for (Square s = A1; s < SquareNum; s++)
 	{ 
@@ -134,10 +136,9 @@ void init()
 		}
 	}
 
+#ifdef BUILD_DEBUG
 	auto end = clock::now();
 	std::chrono::duration<double, std::milli> duration = end - start;
-
-#ifdef BUILD_DEBUG
 	std::cout << "time to initialize: " << duration << std::endl;
 #endif
 	

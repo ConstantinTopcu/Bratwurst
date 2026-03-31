@@ -1,12 +1,12 @@
 #pragma once
 
-#include "core.h"
+#include <engine/core/core.h>
 
-#include "types/bitboard.h"
-#include "types/square.h"
-#include "types/piece.h"
+#include <engine/types/bitboard.h>
+#include <engine/types/square.h>
+#include <engine/types/piece.h>
 
-#include "precomputed.h"
+#include <engine/move_gen/precomputed.h>
 
 #include <span>
 

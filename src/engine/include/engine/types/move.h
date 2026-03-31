@@ -1,12 +1,11 @@
 #pragma once
 
-#include "core.h"
+#include <engine/core/core.h>
 
-#include "types/square.h"
-#include "types/piece.h"
-#include "types/castling_right.h"
-
-#include "types/static_vector.h"
+#include <engine/types/square.h>
+#include <engine/types/piece.h>
+#include <engine/types/castling_right.h>
+#include <engine/types/static_vector.h>
 
 #include <iostream>
 

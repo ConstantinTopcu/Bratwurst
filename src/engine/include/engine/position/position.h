@@ -1,16 +1,17 @@
 #pragma once
 
-#include <core.h>
+#include <engine/core/core.h>
 
-#include <types/castling_right.h>
-#include <types/static_vector.h>
-#include <types/bitboard.h>
-#include <types/square.h>
-#include <types/piece.h>
-#include <types/move.h>
+#include <engine/types/castling_right.h>
+#include <engine/types/static_vector.h>
+#include <engine/types/bitboard.h>
+#include <engine/types/square.h>
+#include <engine/types/piece.h>
+#include <engine/types/move.h>
+#include <engine/types/zobrist.h>
 
-#include <zobrist.h>
-#include <attacks.h>
+#include <engine/move_gen/attacks.h>
+#include <engine/position/StateInfo.h>
 
 #include <expected>
 #include <string_view>
@@ -19,26 +20,6 @@
 
 namespace Bratwurst
 {
-// The StateInfo struct stores additional information needed,
-// to undo a position successfully, since these members of the
-// board representation cannot be recalculated using the move alone
-struct StateInfo
-{
-	// Using raw type over std::bitset<CastlingRightNum>
-	// to avoid the abstraction overhead for maximum performance
-	CastlingRights castlingRights;
-	uint8 halfMoveClock;
-	Square enPassantSquare;
-	Piece capturedPiece;
-	Move prevMove;
-
-	// the following members are stored, 
-	// due to being expensive to recompute
-	Bitboard pinned;
-	Bitboard checkers;
-	Zobrist::Key zobristKey;
-	uint16 material[ColorNum];
-};
 
 class Position
 {
@@ -179,35 +160,6 @@ inline void Position::initZobrist()
 	zobrist ^= (m_colorToMove == Black) ? Zobrist::side : 0ULL;
 
 	stateInfo().zobristKey = zobrist;
-}
-
-inline void Position::updatePinned() 
-{
-	Color friendly = m_colorToMove;
-	Color enemy = ~friendly;
-	Square kingSq = kingSquare(friendly);
-	Bitboard friendlyPieces = colorBB(friendly);
-	Bitboard enemyPieces = colorBB(enemy);
-	Bitboard occupancy = friendlyPieces | enemyPieces;
-
-	Bitboard potentialPinned = attacksBB<Queen>(kingSq, occupancy) & friendlyPieces;
-	occupancy ^= potentialPinned;
-
-	Bitboard rooks = typeBB(Rook, Queen) & enemyPieces;
-	Bitboard bishops = typeBB(Bishop, Queen) & enemyPieces;
-	Bitboard XRayRookAttacks = attacksBB<Rook>(kingSq, occupancy);
-	Bitboard XRayBishopAttacks = attacksBB<Bishop>(kingSq, occupancy);
-	Bitboard pinners = (XRayRookAttacks & rooks) | (XRayBishopAttacks & bishops);
-
-	Bitboard pinned = 0ULL;
-
-	while (pinners)
-	{
-		Square pinner = popLsb(pinners);
-		pinned |= (Precomputed::lineBBs[1][kingSq][pinner] & friendlyPieces);
-	}
-
-	stateInfo().pinned = pinned;
 }
 
 inline void Position::movePiece(Square src, Square dst, Piece srcPiece) 

@@ -1,13 +1,9 @@
-#include "move_gen.h"
-#include "attacks.h"
-#include "types/castling_right.h"
-
-#include <iostream>
+#include <engine/move_gen/move_gen.h>
+#include <engine/move_gen/attacks.h>
+#include <engine/types/castling_right.h>
 
 namespace Bratwurst
 {
-
-
 
 	template<Color friendly, GenType genType>
 	void generatePawnMoves(const Position& pos, Bitboard mask, MoveList& out) 

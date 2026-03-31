@@ -1,6 +1,5 @@
-#include <precomputed.h>
-#include <zobrist.h>
-#include <perft.h>
+#include <engine/position/position.h>
+#include <engine/testing/perft.h>
 
 #include <iostream>
 

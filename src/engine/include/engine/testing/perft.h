@@ -1,7 +1,7 @@
 #pragma once
 
-#include <position.h>
-#include <move_gen.h>
+#include <engine/position/position.h>
+#include <engine/move_gen/move_gen.h>
 
 namespace Bratwurst::Perft
 {

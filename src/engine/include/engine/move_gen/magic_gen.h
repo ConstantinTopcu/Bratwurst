@@ -1,9 +1,7 @@
 #pragma once
 
-#include <core.h>
-
-#include <types/bitboard.h>
-#include <types/square.h>
+#include <engine/types/bitboard.h>
+#include <engine/types/square.h>
 
 #include <span>
 

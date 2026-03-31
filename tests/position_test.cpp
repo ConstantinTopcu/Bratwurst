@@ -1,5 +1,5 @@
 #include <catch2/catch_all.hpp>
-#include <position.h>
+#include <engine/position.h>
 
 using namespace Bratwurst;
 

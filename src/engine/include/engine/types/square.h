@@ -1,7 +1,7 @@
 #pragma once
 
-#include "core.h"
-#include "enum_ops.h"
+#include <engine/core/core.h>
+#include <engine/types/enum_ops.h>
 
 #include <string>
 
