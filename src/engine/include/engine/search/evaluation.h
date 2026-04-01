@@ -14,24 +14,8 @@ constexpr int Infinity = 1000000;
 inline int evaluate(const Position& pos)
 {
 	// TODO: check for checkmate
-
 	Color c = pos.colorToMove();
-	int eval = 0;
-
-	// add white material
-	eval += popCnt(pos.pieceBB(White, Pawn)) * 100;
-	eval += popCnt(pos.pieceBB(White, Knight)) * 300;
-	eval += popCnt(pos.pieceBB(White, Bishop)) * 310;
-	eval += popCnt(pos.pieceBB(White, Rook)) * 500;
-	eval += popCnt(pos.pieceBB(White, Queen)) * 900;
-
-	// subtract black material
-	eval -= popCnt(pos.pieceBB(Black, Pawn)) * 100;
-	eval -= popCnt(pos.pieceBB(Black, Knight)) * 300;
-	eval -= popCnt(pos.pieceBB(Black, Bishop)) * 310;
-	eval -= popCnt(pos.pieceBB(Black, Rook)) * 500;
-	eval -= popCnt(pos.pieceBB(Black, Queen)) * 900;
-
+	int eval = pos.material();
 	return (c == White) ? eval : -eval;
 }
 

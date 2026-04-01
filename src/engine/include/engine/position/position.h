@@ -12,6 +12,7 @@
 
 #include <engine/move_gen/attacks.h>
 #include <engine/position/StateInfo.h>
+#include <engine/search/evaluation_constants.h>
 
 #include <expected>
 #include <string_view>
@@ -79,6 +80,7 @@ public:
 	[[nodiscard]] inline Square enPassantSquare() const { return stateInfo().enPassantSquare; }
 	[[nodiscard]] inline Move prevMove() const { return stateInfo().prevMove; }
 	[[nodiscard]] inline Zobrist::Key zobristKey() const { return stateInfo().zobristKey; }
+	[[nodiscard]] inline int material() const { return m_material; }
 
 private:
 	Piece m_pieces[SquareNum];
@@ -88,6 +90,9 @@ private:
 	Color m_colorToMove;
 	uint16 m_fullMoveCounter;
 	StateHistory m_stateHistory;
+
+	// Evaluation
+	int m_material;
 
 private:
 	// due to performance these 3 functions don't check for required absence or presence of pieces internally
@@ -185,6 +190,8 @@ inline void Position::placePiece(Square s, Piece piece)
 	m_colorBBs[colorOf(piece)] |= mask;
 	m_typeBBs[pieceTypeOf(piece)] |= mask;
 	m_pieces[s] = piece;
+
+	m_material += Evaluation::PieceValue[piece];
 }
 
 inline void Position::removePiece(Square s, Piece piece) 
@@ -196,5 +203,7 @@ inline void Position::removePiece(Square s, Piece piece)
 	m_colorBBs[colorOf(piece)] ^= mask;
 	m_typeBBs[pieceTypeOf(piece)] ^= mask;
 	m_pieces[s] = NonePiece;
+
+	m_material -= Evaluation::PieceValue[piece];
 }
 } 
