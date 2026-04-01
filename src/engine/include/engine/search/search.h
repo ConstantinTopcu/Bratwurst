@@ -9,8 +9,9 @@ struct SearchResult
 {
 	int evaluation;
 	Move bestMove;
+	int nodes;
 };
 
-SearchResult search(Position& position, int depth = 4);
+SearchResult search(Position& position, int depth);
 
 }
