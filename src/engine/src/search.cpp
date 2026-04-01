@@ -5,7 +5,10 @@
 namespace Bratwurst::Search
 {
 
-
+// constants for search
+constexpr int MaxQuiescenceDepth = 20;
+constexpr int HeuristicCaptureBonus = 200;
+constexpr int HeuristicPromotionBonus = 1000;
 
 int score_move(const Position& pos, Move move)
 {
@@ -19,7 +22,7 @@ int score_move(const Position& pos, Move move)
 	{
 		eval += Evaluation::TypeValue[pieceTypeOf(capturePiece)];
 		eval -= Evaluation::TypeValue[pieceTypeOf(srcPiece)] >> 3;
-		eval += 200;
+		eval += HeuristicCaptureBonus;
 	}
 
 	// if you move to a square that is attacked by a pawn, you likely loose your piece
@@ -30,10 +33,73 @@ int score_move(const Position& pos, Move move)
 
 	if (move.promotion())
 	{
-		eval += 1'000 + Evaluation::TypeValue[move.promotionType()];
+		eval += HeuristicPromotionBonus + Evaluation::TypeValue[move.promotionType()];
 	}
 
 	return eval;
+}
+
+int quiescence(Position& pos, int alpha, int beta, int ply, int maxDepth, int& nodes)
+{
+	nodes++;
+
+	Color c = pos.colorToMove();
+
+	int standPat = evaluate(pos);
+
+	// assumes player is not in zugzwang
+	if (standPat >= beta || ply == maxDepth)
+	{
+		return standPat;
+	}
+
+	alpha = std::max(alpha, standPat);
+
+	auto moves = generateMoves<GenType::Captures>(pos);
+
+	if (moves.empty())
+	{
+		return standPat;
+	}
+
+	// create parralel vector
+	std::vector<int> evals(moves.size());
+	for (int i = 0; i < moves.size(); i++)
+	{
+		evals[i] = score_move(pos, moves[i]);
+	}
+
+	for (int i = 0; i < moves.size(); i++)
+	{
+		int bestHeuristicIndex = i;
+
+		for (int j = i; j < moves.size(); j++)
+		{
+			if (evals[j] > evals[bestHeuristicIndex])
+			{
+				bestHeuristicIndex = j;
+			}
+		}
+
+		Move bestHeuristicMove = moves[bestHeuristicIndex];
+		std::swap(moves[bestHeuristicIndex], moves[i]);
+		std::swap(evals[bestHeuristicIndex], evals[i]);
+
+		pos.doMove(bestHeuristicMove);
+
+		// recursivly call negamax
+		int eval = -quiescence(pos, -beta, -alpha, ply + 1, maxDepth, nodes);
+		alpha = std::max(alpha, eval);
+
+		pos.undoMove();
+
+		if (alpha >= beta)
+		{
+			break; // beta cutoff
+		}
+	}
+
+	return alpha;
 }
 
 int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, int& nodes)
@@ -44,7 +110,7 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, int& node
 
 	if (ply == maxDepth)
 	{
-		return evaluate(pos);
+		return quiescence(pos, alpha, beta, ply, maxDepth + MaxQuiescenceDepth, nodes);
 	}
 
 	auto moves = generateMoves<GenType::All>(pos);
@@ -55,8 +121,7 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, int& node
 	}
 
 	// create parralel vector
-	std::vector<int> evals;
-	evals.reserve(moves.size());
+	std::vector<int> evals(moves.size());
 
 	for (int i = 0; i < moves.size(); i++)
 	{
