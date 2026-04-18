@@ -79,8 +79,14 @@ public:
 	[[nodiscard]] inline uint8 halfmoveClock() const { return stateInfo().halfMoveClock; }
 	[[nodiscard]] inline Square enPassantSquare() const { return stateInfo().enPassantSquare; }
 	[[nodiscard]] inline Move prevMove() const { return stateInfo().prevMove; }
+
 	[[nodiscard]] inline Zobrist::Key zobristKey() const { return stateInfo().zobristKey; }
 	[[nodiscard]] inline int material() const { return m_material; }
+	[[nodiscard]] inline int egPSQT() const { return m_egPSQT; }
+	[[nodiscard]] inline int mgPSQT() const { return m_mgPSQT; }
+	[[nodiscard]] inline int phase() const { return std::min(m_phase, Evaluation::MAX_PHASE); }
+
+	[[nodiscard]] inline std::string toString() const;
 
 private:
 	Piece m_pieces[SquareNum];
@@ -91,8 +97,14 @@ private:
 	uint16 m_fullMoveCounter;
 	StateHistory m_stateHistory;
 
-	// Evaluation
+	// Incrementally updated to speed up evaluation
 	int m_material;
+	int m_egPSQT;
+	int m_mgPSQT;
+
+	// this value is an indicator to how far the game has progressed.
+	// 24 meaning the game has just started and 0 there are no pieces except pawns on the board.
+	int m_phase;
 
 private:
 	// due to performance these 3 functions don't check for required absence or presence of pieces internally
@@ -100,6 +112,11 @@ private:
 	inline void placePiece(Square s, Piece piece);
 	inline void removePiece(Square s, Piece piece);
 };
+
+inline std::ostream& operator<<(std::ostream& os, const Position& pos)
+{
+	return os << pos.toString();
+}
 
 template<typename... PieceTypes>
 inline Bitboard Position::typeBB(PieceTypes... types) const 
@@ -174,9 +191,18 @@ inline void Position::movePiece(Square src, Square dst, Piece srcPiece)
 	ASSERT(m_pieces[dst] == NonePiece);
 	ASSERT(isValid(srcPiece));
 
+	// Update PSQT
+	int srcEntry = Evaluation::PSQT[srcPiece][src];
+	int dstEntry = Evaluation::PSQT[srcPiece][dst];
+	m_mgPSQT += Evaluation::mg(dstEntry) - Evaluation::mg(srcEntry);
+	m_egPSQT += Evaluation::eg(dstEntry) - Evaluation::eg(srcEntry);
+
+	// move the actuall piece
 	Bitboard moveMask = squareMask(src) | squareMask(dst);
+
 	m_colorBBs[colorOf(srcPiece)] ^= moveMask;
 	m_typeBBs[pieceTypeOf(srcPiece)] ^= moveMask;
+
 	m_pieces[src] = NonePiece;
 	m_pieces[dst] = srcPiece;
 }
@@ -186,12 +212,22 @@ inline void Position::placePiece(Square s, Piece piece)
 	ASSERT(isValid(piece) && isValid(s));
 	ASSERT(m_pieces[s] == NonePiece);
 
+	PieceType pt = pieceTypeOf(piece);
+
+	// update PSQT
+	int entry = Evaluation::PSQT[piece][s];
+	m_mgPSQT += Evaluation::mg(entry);
+	m_egPSQT += Evaluation::eg(entry);
+
+	// update game phase and material
+	m_phase += Evaluation::PiecePhaseValue[pt];
+	m_material += Evaluation::PieceValue[piece];
+
+	// place Piece
 	Bitboard mask = squareMask(s);
 	m_colorBBs[colorOf(piece)] |= mask;
-	m_typeBBs[pieceTypeOf(piece)] |= mask;
+	m_typeBBs[pt] |= mask;
 	m_pieces[s] = piece;
-
-	m_material += Evaluation::PieceValue[piece];
 }
 
 inline void Position::removePiece(Square s, Piece piece) 
@@ -199,11 +235,42 @@ inline void Position::removePiece(Square s, Piece piece)
 	ASSERT(isValid(s) && isValid(piece));
 	ASSERT(m_pieces[s] == piece);
 
+	PieceType pt = pieceTypeOf(piece);
+
+	// update PSQT
+	int entry = Evaluation::PSQT[piece][s];
+	m_mgPSQT -= Evaluation::mg(entry);
+	m_egPSQT -= Evaluation::eg(entry);
+
+	// update game phase and material
+	m_phase -= Evaluation::PiecePhaseValue[pt];
+	m_material -= Evaluation::PieceValue[piece];
+
+	// remove piece
 	Bitboard mask = squareMask(s);
 	m_colorBBs[colorOf(piece)] ^= mask;
-	m_typeBBs[pieceTypeOf(piece)] ^= mask;
+	m_typeBBs[pt] ^= mask;
 	m_pieces[s] = NonePiece;
-
-	m_material -= Evaluation::PieceValue[piece];
 }
+
+inline std::string Position::toString() const
+{
+	std::string pos;
+	pos.reserve(8 * 8 * 2 + 8); // pieces + spaces + newlines
+
+	for (Rank r = Rank8; isValid(r); --r)
+	{
+		for (File f = FileA; f < FileNum; ++f)
+		{
+			const Square s = makeSquare(f, r);
+			pos += pieceToChar(m_pieces[s]);
+			pos += ' ';
+		}
+
+		pos += '\n';
+	}
+
+	return pos;
+}
+
 } 

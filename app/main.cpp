@@ -12,19 +12,14 @@ int main(char argc, char* argv[])
     Precomputed::init();
     Zobrist::init();
 
-    Position pos = Position::fromFEN("r2q1rk1/ppp2pp1/2np3p/2b1p3/2B1P1b1/2NP1N2/PPP2P2/R1BQ1RK1 w - - 0 12").value();
+    Position pos = Position::fromFEN().value();
 
-    auto start = std::chrono::high_resolution_clock::now();
-    auto [eval, bestMove, nodes] = Search::search(pos, 7);
-    auto end = std::chrono::high_resolution_clock::now();
-
-    // duration in milliseconds
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-
-    pos.doMove(bestMove);
-
-    std::cout << "Best Move: " << bestMove.toString() << " (Eval: " << eval << "; Nodes: " << nodes << ")\n";
-    std::cout << "Search time: " << duration << " ms\n";
+    for (int i = 0; i < 50; i++)
+    {
+        auto [eval, bestMove, nodes] = Search::search(pos, 6);
+        pos.doMove(bestMove);
+        std::cout << pos << std::endl;
+    }
 
     Precomputed::cleanup();
 }

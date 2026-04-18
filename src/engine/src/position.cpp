@@ -18,7 +18,12 @@ void Position::clear()
     m_colorToMove = NoneColor;
     m_fullMoveCounter = 0;
     m_material = 0;
+
+    m_egPSQT = 0;
+    m_mgPSQT = 0;
+    m_phase = 0;
 }
+
 /* Parse a chess position from Forsyth-Edwards Notation (FEN)
 * FEN format: "pieces active_color castling en_passant halfmove fullmove"
 * Example: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1" */

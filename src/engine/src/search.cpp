@@ -45,7 +45,7 @@ int quiescence(Position& pos, int alpha, int beta, int ply, int maxDepth, int& n
 
 	Color c = pos.colorToMove();
 
-	int standPat = evaluate(pos);
+	int standPat = Evaluation::evaluate(pos);
 
 	// assumes player is not in zugzwang
 	if (standPat >= beta || ply == maxDepth)
@@ -117,7 +117,7 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, int& node
 
 	if (moves.empty())
 	{
-		return (pos.checkers()) ? -CheckMate + ply : StaleMate;
+		return (pos.checkers()) ? -Evaluation::CheckMate + ply : Evaluation::StaleMate;
 	}
 
 	// create parralel vector
@@ -164,7 +164,7 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, int& node
 
 SearchResult search(Position& pos, int depth)
 {
-	int bestEval = INT_MIN;
+	int alpha = -Evaluation::Infinity;
 	Move bestMove = Move::Null();
 	int nodes = 0;
 
@@ -175,18 +175,18 @@ SearchResult search(Position& pos, int depth)
 		pos.doMove(move);
 
 		// recursivly call minimax
-		int eval = -negamax(pos, -Infinity, +Infinity, 1, depth, nodes);
+		int eval = -negamax(pos, -Evaluation::Infinity, -alpha, 1, depth, nodes);
 
-		if (eval > bestEval)
+		if (eval > alpha)
 		{
-			bestEval = eval;
+			alpha = eval;
 			bestMove = move;
 		}
 
 		pos.undoMove();
 	}
 
-	return { bestEval, bestMove, nodes};
+	return { alpha, bestMove, nodes};
 }
 
 }
