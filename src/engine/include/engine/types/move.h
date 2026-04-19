@@ -49,6 +49,16 @@ struct Move
 
 	inline std::string toString() const { return std::string(squareToString(src()) + squareToString(dst())); }
 
+	constexpr bool operator==(const Move& other) const
+	{
+		return data == other.data;
+	}
+
+	constexpr bool operator!=(const Move& other) const
+	{
+		return data != other.data;
+	}
+
 private:
 	// The move is packed into 16 bits with the following layout:
 	// [ 0..5 ]  (6 bits)  Source square       (A1 - H8)

@@ -1,7 +1,9 @@
-#include <engine/search/search.h>
 #include <engine/move_gen/move_gen.h>
+
+#include <engine/search/search.h>
 #include <engine/search/evaluation.h>
 #include <engine/search/move_picker.h>
+#include <engine/search/transposition_table.h>
 
 #include <chrono>
 
@@ -9,7 +11,6 @@ namespace Bratwurst::Search
 {
 
 // constants for search
-constexpr int MaxQuiescenceDepth = 20;
 
 using Clock = std::chrono::high_resolution_clock;
 
@@ -21,6 +22,11 @@ struct SearchInfo
 	int nodes = 0;
 };
 
+constexpr int MaxQuiescenceDepth = 20;
+
+// Transposition table of size 256 MB
+TranspositionTable TT(256);
+
 inline bool updateTime(SearchInfo& info)
 {
 	auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - info.start);
@@ -30,12 +36,11 @@ inline bool updateTime(SearchInfo& info)
 
 int quiescence(Position& pos, int alpha, int beta, int ply, int depth, SearchInfo& searchInfo)
 {
-	// every 2048 nodes check wether time is about to run out
 	if ((searchInfo.nodes & 2047) == 0)
 	{
 		updateTime(searchInfo);
 	}
-	
+
 	if (searchInfo.stopped)
 	{
 		return -Evaluation::Infinity;
@@ -45,7 +50,6 @@ int quiescence(Position& pos, int alpha, int beta, int ply, int depth, SearchInf
 
 	int standPat = Evaluation::evaluate(pos);
 
-	// assumes player is not in zugzwang
 	if (standPat >= beta || ply == depth)
 	{
 		return standPat;
@@ -70,11 +74,14 @@ int quiescence(Position& pos, int alpha, int beta, int ply, int depth, SearchInf
 		int eval = -quiescence(pos, -beta, -alpha, ply + 1, depth, searchInfo);
 		pos.undoMove();
 
-		alpha = std::max(alpha, eval);
+		if (eval > alpha)
+		{
+			alpha = eval;
+		}
 
 		if (alpha >= beta)
 		{
-			break; // beta cutoff
+			break;
 		}
 	}
 
@@ -96,6 +103,19 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 
 	searchInfo.nodes++;
 
+	// Check for position in transposition table
+	const TranspositionTable::TTEntry* entry = TT.probe(pos.zobristKey());
+
+	if (entry != nullptr && entry->depth >= maxDepth - ply)
+	{
+		using enum TranspositionTable::MoveBound;
+
+		if (entry->bound == Lower) alpha = std::max(alpha, entry->score);
+		if (entry->bound == Upper) beta = std::min(beta, entry->score);
+		if (entry->bound == Exact) return entry->score;
+		if (alpha >= beta) return entry->score;
+	}
+
 	if (ply == maxDepth)
 	{
 		return quiescence(pos, alpha, beta, ply + 1, ply + MaxQuiescenceDepth, searchInfo);
@@ -108,7 +128,16 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 		return (pos.checkers()) ? -Evaluation::CheckMate + ply : Evaluation::StaleMate;
 	}
 
-	MovePicker picker(pos, moves);
+	TranspositionTable::TTEntry newEntry =
+	{
+		.key		= pos.zobristKey(),
+		.bestMove	= Move::Null(),
+		.score		= alpha,
+		.bound		= TranspositionTable::MoveBound::Upper,
+		.depth		= maxDepth - ply
+	};
+
+	MovePicker picker(pos, moves, (entry) ? entry->bestMove : Move::Null());
 
 	while (picker.hasNext())
 	{
@@ -118,12 +147,28 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 		int eval = -negamax(pos, -beta, -alpha, ply + 1, maxDepth, searchInfo);
 		pos.undoMove();
 
-		alpha = std::max(alpha, eval);
+		if (eval > alpha)
+		{
+			alpha = eval;
+
+			newEntry.bound = TranspositionTable::MoveBound::Exact;
+			newEntry.bestMove = move;
+			newEntry.score = eval;
+		}
 
 		if (alpha >= beta)
 		{
+			newEntry.bound = TranspositionTable::MoveBound::Lower;
+			newEntry.score = alpha;
+			newEntry.bestMove = move;
+
 			break; // beta cutoff
 		}
+	}
+
+	if (!searchInfo.stopped)
+	{
+		TT.store(std::move(newEntry));
 	}
 
 	return alpha;
@@ -132,31 +177,60 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 
 SearchResult search(Position& pos, int timeMs)
 {
-	SearchInfo searchInfo;
-	searchInfo.start = Clock::now();
-	searchInfo.nodes = 0;
-	searchInfo.stopped = false;
-	searchInfo.timeMS = timeMs;
+	SearchInfo searchInfo =  
+	{
+		.start		= Clock::now(),
+		.stopped	= false, 
+		.timeMS		= timeMs, 
+		.nodes		= 0 
+	};
 
-	SearchResult searchResult;
-	searchResult.bestMove = Move::Null();
-	searchResult.evaluation = -Evaluation::Infinity;
-	searchResult.depth = 0;
-	searchResult.nodes = 0;
+	SearchResult searchResult = 
+	{ 
+		.evaluation	= -Evaluation::Infinity,
+		.bestMove	= Move::Null(),
+		.nodes		= 0, 
+		.depth		= 0
+	};
 
 	MoveList moves = generateMoves<GenType::All>(pos);
 
-	// The game has terminated already
+	// make sure game hasnt terminated yet
 	if (moves.empty()) return searchResult;
 
-	// set best move to moves[0] in case it terminates to quickly
-	searchResult.bestMove = moves[0];
-
-	for (int currentDepth = 1; currentDepth < 20; currentDepth++)
+	for (int currentMaxDepth = 1; currentMaxDepth <= 8; currentMaxDepth++)
 	{
-		MovePicker picker(pos, moves);
 		int alpha = -Evaluation::Infinity;
-		Move bestIterMove = Move::Null();
+		Move bestIterMove = moves[0];
+
+		const TranspositionTable::TTEntry* entry = TT.probe(pos.zobristKey());
+		Move TTMove = (entry) ? entry->bestMove : Move::Null();
+
+		if (entry != nullptr && entry->depth >= currentMaxDepth)
+		{
+			using enum TranspositionTable::MoveBound;
+
+			if (entry->bound == Lower) alpha = std::max(alpha, entry->score);
+
+			if (entry->bound == Exact)
+			{
+				searchResult.bestMove = entry->bestMove;
+				searchResult.evaluation = entry->score * ((pos.colorToMove() == White) ? 1 : -1);
+				searchResult.depth++;
+				continue;
+			}
+		}
+
+		TranspositionTable::TTEntry newEntry =
+		{
+			.key		= pos.zobristKey(),
+			.bestMove	= Move::Null(),
+			.score		= alpha,
+			.bound		= TranspositionTable::MoveBound::Upper,
+			.depth		= currentMaxDepth
+		};
+
+		MovePicker picker(pos, moves, TTMove);
 
 		while (picker.hasNext())
 		{
@@ -164,7 +238,7 @@ SearchResult search(Position& pos, int timeMs)
 			Move move = picker.pick();
 
 			pos.doMove(move);
-			int eval = -negamax(pos, -Evaluation::Infinity, -alpha, 1, currentDepth, searchInfo);
+			int eval = -negamax(pos, -Evaluation::Infinity, -alpha, 1, currentMaxDepth, searchInfo);
 			pos.undoMove();
 
 			if (searchInfo.stopped) break;
@@ -173,13 +247,19 @@ SearchResult search(Position& pos, int timeMs)
 			{
 				alpha = eval;
 				bestIterMove = move;
+
+				newEntry.bound = TranspositionTable::MoveBound::Exact;
+				newEntry.bestMove = move;
+				newEntry.score = eval;
 			}
 		}
 
 		if (searchInfo.stopped) break;
 
+		TT.store(std::move(newEntry));
+
 		searchResult.bestMove = bestIterMove;
-		searchResult.evaluation = alpha;
+		searchResult.evaluation = alpha * ((pos.colorToMove() == White) ? 1 : -1);
 		searchResult.depth++;
 	}
 

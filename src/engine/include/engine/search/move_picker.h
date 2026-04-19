@@ -11,13 +11,13 @@ int score_move(const Position& pos, Move move);
 class MovePicker
 {
 public:
-	inline MovePicker(const Position& pos, MoveList& moves) noexcept
+	inline MovePicker(const Position& pos, MoveList& moves, Move bestMove = Move::Null()) noexcept
 		: m_moves(moves)
 		, m_index(0)
 	{
 		for (int i = 0; i < moves.size(); i++)
 		{
-			m_evals[i] = score_move(pos, moves[i]);
+			m_evals[i] = (moves[i] == bestMove) ? Evaluation::Infinity : score_move(pos, moves[i]);
 		}
 	}
 
