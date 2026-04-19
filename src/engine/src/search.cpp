@@ -1,43 +1,13 @@
 #include <engine/search/search.h>
 #include <engine/move_gen/move_gen.h>
 #include <engine/search/evaluation.h>
+#include <engine/search/move_picker.h>
 
 namespace Bratwurst::Search
 {
 
 // constants for search
 constexpr int MaxQuiescenceDepth = 20;
-constexpr int HeuristicCaptureBonus = 200;
-constexpr int HeuristicPromotionBonus = 1000;
-
-int score_move(const Position& pos, Move move)
-{
-	int eval = 0;
-
-	Piece srcPiece = pos.pieceOn(move.src());
-	Piece capturePiece = pos.pieceOn(move.dst());
-	Color c = pos.colorToMove();
-
-	if (capturePiece != NonePiece)
-	{
-		eval += Evaluation::TypeValue[pieceTypeOf(capturePiece)];
-		eval -= Evaluation::TypeValue[pieceTypeOf(srcPiece)] >> 3;
-		eval += HeuristicCaptureBonus;
-	}
-
-	// if you move to a square that is attacked by a pawn, you likely loose your piece
-	if (Precomputed::pseudoAttacks[makePiece(c, Pawn)][move.dst()] & pos.pieceBB(~c, Pawn))
-	{
-		eval -= Evaluation::TypeValue[pieceTypeOf(srcPiece)];
-	}
-
-	if (move.promotion())
-	{
-		eval += HeuristicPromotionBonus + Evaluation::TypeValue[move.promotionType()];
-	}
-
-	return eval;
-}
 
 int quiescence(Position& pos, int alpha, int beta, int ply, int maxDepth, int& nodes)
 {
@@ -55,43 +25,24 @@ int quiescence(Position& pos, int alpha, int beta, int ply, int maxDepth, int& n
 
 	alpha = std::max(alpha, standPat);
 
-	auto moves = generateMoves<GenType::Captures>(pos);
+	MoveList moves = generateMoves<GenType::Captures>(pos);
 
 	if (moves.empty())
 	{
 		return standPat;
 	}
 
-	// create parralel vector
-	std::vector<int> evals(moves.size());
-	for (int i = 0; i < moves.size(); i++)
+	MovePicker picker(pos, moves);
+
+	while(picker.hasNext())
 	{
-		evals[i] = score_move(pos, moves[i]);
-	}
+		Move move = picker.pick();
 
-	for (int i = 0; i < moves.size(); i++)
-	{
-		int bestHeuristicIndex = i;
-
-		for (int j = i; j < moves.size(); j++)
-		{
-			if (evals[j] > evals[bestHeuristicIndex])
-			{
-				bestHeuristicIndex = j;
-			}
-		}
-
-		Move bestHeuristicMove = moves[bestHeuristicIndex];
-		std::swap(moves[bestHeuristicIndex], moves[i]);
-		std::swap(evals[bestHeuristicIndex], evals[i]);
-
-		pos.doMove(bestHeuristicMove);
-
-		// recursivly call negamax
+		pos.doMove(move);
 		int eval = -quiescence(pos, -beta, -alpha, ply + 1, maxDepth, nodes);
-		alpha = std::max(alpha, eval);
-
 		pos.undoMove();
+
+		alpha = std::max(alpha, eval);
 
 		if (alpha >= beta)
 		{
@@ -114,43 +65,23 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, int& node
 	}
 
 	auto moves = generateMoves<GenType::All>(pos);
-
+	
 	if (moves.empty())
 	{
 		return (pos.checkers()) ? -Evaluation::CheckMate + ply : Evaluation::StaleMate;
 	}
 
-	// create parralel vector
-	std::vector<int> evals(moves.size());
+	MovePicker picker(pos, moves);
 
-	for (int i = 0; i < moves.size(); i++)
+	while (picker.hasNext())
 	{
-		evals[i] = score_move(pos, moves[i]);
-	}
+		Move move = picker.pick();
 
-	for (int i = 0; i < moves.size(); i++)
-	{
-		int bestHeuristicIndex = i;
-
-		for (int j = i; j < moves.size(); j++)
-		{
-			if (evals[j] > evals[bestHeuristicIndex])
-			{
-				bestHeuristicIndex = j;
-			}
-		}
-
-		Move bestHeuristicMove = moves[bestHeuristicIndex];
-		std::swap(moves[bestHeuristicIndex], moves[i]);
-		std::swap(evals[bestHeuristicIndex], evals[i]);
-
-		pos.doMove(bestHeuristicMove);
-
-		// recursivly call negamax
+		pos.doMove(move);
 		int eval = -negamax(pos, -beta, -alpha, ply + 1, maxDepth, nodes);
-		alpha = std::max(alpha, eval);
-
 		pos.undoMove();
+
+		alpha = std::max(alpha, eval);
 
 		if (alpha >= beta)
 		{
@@ -169,21 +100,21 @@ SearchResult search(Position& pos, int depth)
 	int nodes = 0;
 
 	auto moves = generateMoves<GenType::All>(pos);
+	MovePicker picker(pos, moves);
 
-	for (Move move : moves)
+	while (picker.hasNext())
 	{
+		Move move = picker.pick();
+		
 		pos.doMove(move);
-
-		// recursivly call minimax
 		int eval = -negamax(pos, -Evaluation::Infinity, -alpha, 1, depth, nodes);
+		pos.undoMove();
 
 		if (eval > alpha)
 		{
 			alpha = eval;
 			bestMove = move;
 		}
-
-		pos.undoMove();
 	}
 
 	return { alpha, bestMove, nodes};
