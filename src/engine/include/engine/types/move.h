@@ -12,6 +12,8 @@
 namespace Bratwurst
 {
 
+class Position;
+
 struct Move
 {
 	enum Flag : uint8
@@ -48,6 +50,9 @@ struct Move
 	constexpr PieceType promotionType() const;
 
 	inline std::string toString() const { return std::string(squareToString(src()) + squareToString(dst())); }
+
+	// needs pos for context
+	static Move fromString(const std::string& str, const Position& pos);
 
 	constexpr bool operator==(const Move& other) const
 	{

@@ -37,7 +37,7 @@ public:
 		m_mask = entryCnt - 1;
 
 		// Info Log
-		std::cout << "Transposition successfully created (entries: " << entryCnt << "; size: " << (entryCnt * sizeof(TTEntry)) / (1024 * 1024) << " mb)" << std::endl;
+		//std::cout << "Transposition successfully created (entries: " << entryCnt << "; size: " << (entryCnt * sizeof(TTEntry)) / (1024 * 1024) << " mb)" << std::endl;
 	}
 
 

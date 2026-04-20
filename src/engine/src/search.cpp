@@ -198,7 +198,7 @@ SearchResult search(Position& pos, int timeMs)
 	// make sure game hasnt terminated yet
 	if (moves.empty()) return searchResult;
 
-	for (int currentMaxDepth = 1; currentMaxDepth <= 8; currentMaxDepth++)
+	for (int currentMaxDepth = 1; currentMaxDepth <= 100; currentMaxDepth++)
 	{
 		int alpha = -Evaluation::Infinity;
 		Move bestIterMove = moves[0];
