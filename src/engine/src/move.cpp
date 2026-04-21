@@ -27,7 +27,7 @@ Move Move::fromString(const std::string& str, const Position& pos)
 	}
 
 	// Castling
-	if (pos.pieceOn(src) == King && std::abs((int)(src)-(int)(dst)) == 2)
+	if (pieceTypeOf(pos.pieceOn(src)) == King && std::abs((int)(src)-(int)(dst)) == 2)
 		return Move(src, dst, (dst > src) ? Flag::CastlingOO : Flag::CastlingOOO);
 
 	// En passant
@@ -35,6 +35,25 @@ Move Move::fromString(const std::string& str, const Position& pos)
 		return Move(src, dst, Flag::EnPassant);
 
 	return Move(src, dst);
+}
+
+std::string Move::toString() const
+{
+	std::string str = squareToString(src()) + squareToString(dst());
+
+	if (promotion())
+	{
+		switch (flag())
+		{
+		case Flag::KnightPromotion: str += 'n'; break;
+		case Flag::BishopPromotion: str += 'b'; break;
+		case Flag::RookPromotion:   str += 'r'; break;
+		case Flag::QueenPromotion:  str += 'q'; break;
+		default: break;
+		}
+	}
+
+	return str;
 }
 
 }

@@ -46,6 +46,9 @@ extern Bitboard pseudoAttacks[PieceTypeNum + 1][SquareNum];
 // If s1 and s2 do not align, the bitboard is set to 0ULL.
 extern Bitboard lineBBs[2][SquareNum][SquareNum];
 
+// bitboard of 3 squares in front of king for easy pawn shield calculation
+extern Bitboard pawnShieldMask[ColorNum][SquareNum];
+
 void init();
 void cleanup();
 

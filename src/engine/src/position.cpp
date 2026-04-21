@@ -102,7 +102,7 @@ std::expected<Position, Position::FenError> Position::fromFEN(const std::string&
     try
     {
         int halfmoveClock = std::stoi(parts[4]);
-        if (halfmoveClock < 0 || halfmoveClock > 50) return std::unexpected(FenError::InvalidHalfmoveClock);
+        if (halfmoveClock < 0 || halfmoveClock >= 100) return std::unexpected(FenError::InvalidHalfmoveClock);
         currentStateInfo.halfMoveClock = static_cast<uint8>(halfmoveClock);
     }
     catch (const std::invalid_argument& e)

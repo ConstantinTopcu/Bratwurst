@@ -23,6 +23,7 @@ struct SearchInfo
 };
 
 constexpr int MaxQuiescenceDepth = 20;
+constexpr int MaxSearchDepth = 100;
 
 // Transposition table of size 256 MB
 TranspositionTable TT(256);
@@ -30,14 +31,14 @@ TranspositionTable TT(256);
 inline bool updateTime(SearchInfo& info)
 {
 	auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - info.start);
-	info.stopped = elapsed.count() >= info.timeMS - 1; // 1 MS time buffer to cancel search
+	info.stopped = elapsed.count() >= info.timeMS - 5; // 1 MS time buffer to cancel search
 	return info.stopped;
 }
 
 int quiescence(Position& pos, int alpha, int beta, int ply, int depth, SearchInfo& searchInfo)
 {
 	if ((searchInfo.nodes & 2047) == 0)
-	{
+	{    
 		updateTime(searchInfo);
 	}
 
@@ -102,6 +103,9 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 	}
 
 	searchInfo.nodes++;
+
+	// check for 3 fold repetition
+
 
 	// Check for position in transposition table
 	const TranspositionTable::TTEntry* entry = TT.probe(pos.zobristKey());
@@ -234,6 +238,7 @@ SearchResult search(Position& pos, int timeMs)
 
 		while (picker.hasNext())
 		{
+
 			searchInfo.nodes++;
 			Move move = picker.pick();
 
@@ -261,6 +266,11 @@ SearchResult search(Position& pos, int timeMs)
 		searchResult.bestMove = bestIterMove;
 		searchResult.evaluation = alpha * ((pos.colorToMove() == White) ? 1 : -1);
 		searchResult.depth++;
+
+		std::cout << "info depth " << currentMaxDepth
+			<< " score cp " << alpha
+			<< " nodes " << searchInfo.nodes
+			<< "\n";
 	}
 
 	searchResult.nodes = searchInfo.nodes;

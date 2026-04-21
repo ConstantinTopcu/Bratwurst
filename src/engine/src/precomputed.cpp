@@ -14,6 +14,8 @@ namespace Bratwurst::Precomputed
 Magic magics[2][SquareNum];
 Bitboard pseudoAttacks[PieceTypeNum + 1][SquareNum];
 Bitboard lineBBs[2][SquareNum][SquareNum];
+Bitboard pawnShieldMask[ColorNum][SquareNum];
+
 static bool initialized = false;
 
 // piece offsets
@@ -102,6 +104,9 @@ void init()
 
 	for (Square s = A1; s < SquareNum; s++)
 	{ 
+		Rank r = rankOf(s);
+		File f = fileOf(s);
+
 		//init magics
 		magics[0][s] = initMagic(s, bishopDirections, precomputedBishopMagics[s]);
 		magics[1][s] = initMagic(s, rookDirections, precomputedRookMagics[s]);
@@ -114,6 +119,25 @@ void init()
 		pseudoAttacks[Rook][s] = dynamicAttacks<true>(s, rookDirections);
 		pseudoAttacks[Queen][s] = pseudoAttacks[Bishop][s] | pseudoAttacks[Rook][s];
 		pseudoAttacks[King][s] = dynamicAttacks(s, kingOffsets);
+
+		pawnShieldMask[White][s] = 0ULL;
+		pawnShieldMask[Black][s] = 0ULL;
+
+		// add white pawn shield
+		if (r != Rank8)
+		{
+			pawnShieldMask[White][s] |= squareMask(s + Up);
+			if (f != FileA) pawnShieldMask[White][s] |= squareMask(s + UpLeft);
+			if (f != FileH) pawnShieldMask[White][s] |= squareMask(s + UpRight);
+		}
+
+		// add black pawn shield
+		if (r != Rank1)
+		{
+			pawnShieldMask[Black][s] |= squareMask(s + Down);
+			if (f != FileA) pawnShieldMask[Black][s] |= squareMask(s + DownLeft);
+			if (f != FileH) pawnShieldMask[Black][s] |= squareMask(s + DownRight);
+		}
 	}
 
 	for (Square s = A1; s < SquareNum; s++)

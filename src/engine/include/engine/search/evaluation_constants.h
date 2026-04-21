@@ -6,10 +6,12 @@
 namespace Bratwurst::Evaluation
 {
 
+// constants
 inline constexpr int StaleMate = 0;
 inline constexpr int CheckMate = 67000;
 inline constexpr int Infinity = 1000000;
 
+// used to calculate game phase
 inline constexpr int PiecePhaseValue[PieceTypeNum] = { 0, 1, 1, 2, 4, 0 };
 
 inline constexpr int MAX_PHASE =
@@ -20,6 +22,7 @@ inline constexpr int MAX_PHASE =
     2 * PiecePhaseValue[Queen];
 
 
+// Used to scale piece mobility in non linear way
 inline constexpr int MobilityTable[PieceTypeNum][28] = 
 {
     {}, // Pawn
@@ -29,6 +32,10 @@ inline constexpr int MobilityTable[PieceTypeNum][28] =
     { -10,-8,-6,-4,-2,0,1,2,3,4,5,6,7,8,9,10,11,12, 13,14,15,16,17,18,19,20,21,22 }, // queen
     {} // King
 };
+
+// used for king evaluation for "Attacking King Zone" method
+inline constexpr int AttackerWeight[PieceTypeNum] = { 0, 20, 20, 40, 80, 0 };
+inline constexpr int AttackWeight[10] = { 0, 50, 75, 88, 94, 97, 99, 99, 99, 99 };
 
 inline constexpr int PieceValue[PieceNum] =
 {

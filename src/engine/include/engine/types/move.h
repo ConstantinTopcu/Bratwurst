@@ -49,9 +49,7 @@ struct Move
 	constexpr CastlingSide castlingSide() const;
 	constexpr PieceType promotionType() const;
 
-	inline std::string toString() const { return std::string(squareToString(src()) + squareToString(dst())); }
-
-	// needs pos for context
+	std::string toString() const;
 	static Move fromString(const std::string& str, const Position& pos);
 
 	constexpr bool operator==(const Move& other) const

@@ -17,6 +17,17 @@ namespace Bratwurst::UCI
 
 	static Position pos;
 
+	static void debugPosition()
+	{
+		std::cout << "info string castling_rights:"
+			<< " wK=" << pos.hasCastlingRight(WhiteOO)
+			<< " wQ=" << pos.hasCastlingRight(WhiteOOO)
+			<< " bK=" << pos.hasCastlingRight(BlackOO)
+			<< " bQ=" << pos.hasCastlingRight(BlackOOO)
+			<< "\n";
+		std::cout.flush();
+	}
+
 	static std::vector<std::string> split(const std::string& line)
 	{
 		std::istringstream ss(line);
@@ -77,6 +88,8 @@ namespace Bratwurst::UCI
 			int inc = (pos.colorToMove() == White) ? winc : binc;
 			movetime = time / 20 + inc; // naive time management
 		}
+
+		debugPosition();
 
 		auto result = Search::search(pos, movetime);
 		std::cout << "bestmove " << result.bestMove.toString() << "\n";
