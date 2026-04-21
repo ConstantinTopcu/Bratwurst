@@ -13,7 +13,7 @@
 #include <engine/move_gen/attacks.h>
 #include <engine/position/StateInfo.h>
 #include <engine/search/evaluation_constants.h>
-
+ 
 #include <expected>
 #include <string_view>
 #include <type_traits>
@@ -79,6 +79,8 @@ public:
 	[[nodiscard]] inline uint8 halfmoveClock() const { return stateInfo().halfMoveClock; }
 	[[nodiscard]] inline Square enPassantSquare() const { return stateInfo().enPassantSquare; }
 	[[nodiscard]] inline Move prevMove() const { return stateInfo().prevMove; }
+
+	[[nodiscard]] inline bool isThreefoldRepetition(int repCnt = 3) const;
 
 	[[nodiscard]] inline Zobrist::Key zobristKey() const { return stateInfo().zobristKey; }
 	[[nodiscard]] inline int material() const { return m_material; }
@@ -161,6 +163,27 @@ inline Bitboard Position::attackers(Square s, Color attackingColor, Bitboard blo
 	attackers |= attacksBB<King>(s, blockers) & pieceBB(attackingColor, King);
 
 	return attackers;
+}
+
+inline bool Position::isThreefoldRepetition(int repCnt) const
+{
+	const Zobrist::Key current = zobristKey();
+	int repetitions = 0;
+
+	const int maxBack = std::min<int>(halfmoveClock(), static_cast<int>(m_stateHistory.size()) - 1);
+
+	// iterate backwards over only the reversible portion of history
+	int size = static_cast<int>(m_stateHistory.size());
+	for (int i = size - 1; i >= size - 1 - maxBack; i -= 2) // step by 2: same side to move
+	{
+		if (m_stateHistory[i].zobristKey == current)
+		{
+			++repetitions;
+			if (repetitions >= repCnt) return true;
+		}
+	}
+
+	return false;
 }
 
 inline void Position::updateCheckers() 

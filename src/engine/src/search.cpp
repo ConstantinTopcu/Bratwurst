@@ -31,12 +31,16 @@ TranspositionTable TT(256);
 inline bool updateTime(SearchInfo& info)
 {
 	auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - info.start);
-	info.stopped = elapsed.count() >= info.timeMS - 5; // 1 MS time buffer to cancel search
+	info.stopped = elapsed.count() >= info.timeMS * 0.95f; // 1 MS time buffer to cancel search
 	return info.stopped;
 }
 
 int quiescence(Position& pos, int alpha, int beta, int ply, int depth, SearchInfo& searchInfo)
 {
+	searchInfo.nodes++;
+
+	if (pos.isThreefoldRepetition(2)) return -10;
+
 	if ((searchInfo.nodes & 2047) == 0)
 	{    
 		updateTime(searchInfo);
@@ -47,7 +51,6 @@ int quiescence(Position& pos, int alpha, int beta, int ply, int depth, SearchInf
 		return -Evaluation::Infinity;
 	}
 
-	searchInfo.nodes++;
 
 	int standPat = Evaluation::evaluate(pos);
 
@@ -91,6 +94,10 @@ int quiescence(Position& pos, int alpha, int beta, int ply, int depth, SearchInf
 
 int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInfo& searchInfo)
 {
+	searchInfo.nodes++;
+
+	if (pos.isThreefoldRepetition(2)) return -10;
+
 	if ((searchInfo.nodes & 2047) == 0)
 	{
 		updateTime(searchInfo);
@@ -102,10 +109,7 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 		return -Evaluation::Infinity;
 	}
 
-	searchInfo.nodes++;
-
 	// check for 3 fold repetition
-
 
 	// Check for position in transposition table
 	const TranspositionTable::TTEntry* entry = TT.probe(pos.zobristKey());
@@ -119,6 +123,7 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 		if (entry->bound == Exact) return entry->score;
 		if (alpha >= beta) return entry->score;
 	}
+
 
 	if (ply == maxDepth)
 	{
@@ -238,7 +243,6 @@ SearchResult search(Position& pos, int timeMs)
 
 		while (picker.hasNext())
 		{
-
 			searchInfo.nodes++;
 			Move move = picker.pick();
 

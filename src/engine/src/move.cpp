@@ -31,7 +31,7 @@ Move Move::fromString(const std::string& str, const Position& pos)
 		return Move(src, dst, (dst > src) ? Flag::CastlingOO : Flag::CastlingOOO);
 
 	// En passant
-	if (pos.pieceOn(src) == Pawn && dst == pos.enPassantSquare())
+	if (pieceTypeOf(pos.pieceOn(src)) == Pawn && dst == pos.enPassantSquare())
 		return Move(src, dst, Flag::EnPassant);
 
 	return Move(src, dst);
