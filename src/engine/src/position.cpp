@@ -1,8 +1,7 @@
 #include <engine/position/position.h>
 
 #include <engine/move_gen/attacks.h>
-
-#include <ranges>
+#include <sstream>
 
 namespace Bratwurst
 {
@@ -37,9 +36,11 @@ std::expected<Position, Position::FenError> Position::fromFEN(const std::string&
 
     // split FEN into its 6 components
     std::vector<std::string> parts;
-    parts.reserve(6);
-    auto view = std::views::split(fen, ' ');
-    for (auto&& part : view) { parts.emplace_back(part.begin(), part.end()); }
+    std::istringstream iss(fen);
+    std::string token;
+
+    while (iss >> token)
+        parts.push_back(token);
 
     if (parts.size() != 6) return std::unexpected(FenError::InvalidFormat);
 

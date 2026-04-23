@@ -39,6 +39,11 @@ public:
 		return m_moves[m_index++];
 	}
 
+	inline int pickedCnt() const
+	{
+		return m_index;
+	}
+
 	inline bool hasNext() noexcept
 	{
 		return m_index < m_moves.size();

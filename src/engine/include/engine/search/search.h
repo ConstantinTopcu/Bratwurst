@@ -9,7 +9,7 @@ struct SearchResult
 {
 	int evaluation;
 	Move bestMove;
-	int nodes;
+	size_t nodes;
 	int depth; // the last depth level, that was fully searched
 };
 

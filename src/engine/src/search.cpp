@@ -28,6 +28,21 @@ constexpr int MaxSearchDepth = 100;
 // Transposition table of size 256 MB
 TranspositionTable TT(256);
 
+// Helper functions to store scores in TT and probe it from TT
+inline int scoreToTT(int score, int ply) 
+{
+	if (score >= Evaluation::CheckMate - MaxSearchDepth) return score + ply;  // make it relative to this node
+	if (score <= -Evaluation::CheckMate + MaxSearchDepth) return score - ply;
+	return score;
+}
+
+inline int scoreFromTT(int score, int ply) 
+{
+	if (score >= Evaluation::CheckMate - MaxSearchDepth) return score - ply;  // convert back to root-relative
+	if (score <= -Evaluation::CheckMate + MaxSearchDepth) return score + ply;
+	return score;
+}
+
 inline bool updateTime(SearchInfo& info)
 {
 	auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - info.start);
@@ -96,6 +111,9 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 {
 	searchInfo.nodes++;
 
+	int remainingDepth = maxDepth - ply;
+
+	// check for 3 fold repetition
 	if (pos.isThreefoldRepetition(2)) return -10;
 
 	if ((searchInfo.nodes & 2047) == 0)
@@ -109,21 +127,20 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 		return -Evaluation::Infinity;
 	}
 
-	// check for 3 fold repetition
-
 	// Check for position in transposition table
 	const TranspositionTable::TTEntry* entry = TT.probe(pos.zobristKey());
+	Move ttMove = (entry != nullptr) ? entry->bestMove : Move::Null();
 
-	if (entry != nullptr && entry->depth >= maxDepth - ply)
+	if (entry != nullptr && entry->depth >= remainingDepth)
 	{
 		using enum TranspositionTable::MoveBound;
 
-		if (entry->bound == Lower) alpha = std::max(alpha, entry->score);
-		if (entry->bound == Upper) beta = std::min(beta, entry->score);
-		if (entry->bound == Exact) return entry->score;
-		if (alpha >= beta) return entry->score;
+		int ttScore = scoreFromTT(entry->score, ply);
+		if (entry->bound == Lower) alpha = std::max(alpha, ttScore);
+		if (entry->bound == Upper) beta = std::min(beta, ttScore);
+		if (entry->bound == Exact) return ttScore;
+		if (alpha >= beta) return ttScore;
 	}
-
 
 	if (ply == maxDepth)
 	{
@@ -134,26 +151,60 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 	
 	if (moves.empty())
 	{
+		// Checkmate in ply
 		return (pos.checkers()) ? -Evaluation::CheckMate + ply : Evaluation::StaleMate;
 	}
-
+	
 	TranspositionTable::TTEntry newEntry =
 	{
 		.key		= pos.zobristKey(),
 		.bestMove	= Move::Null(),
 		.score		= alpha,
 		.bound		= TranspositionTable::MoveBound::Upper,
-		.depth		= maxDepth - ply
+		.depth		= remainingDepth
 	};
 
-	MovePicker picker(pos, moves, (entry) ? entry->bestMove : Move::Null());
+	MovePicker picker(pos, moves, ttMove);
 
 	while (picker.hasNext())
 	{
 		Move move = picker.pick();
+		int eval;
+
+		bool isCheck = pos.checkers();
 
 		pos.doMove(move);
-		int eval = -negamax(pos, -beta, -alpha, ply + 1, maxDepth, searchInfo);
+
+		bool isCapture = pos.stateInfo().capturedPiece != NonePiece;
+		bool givesCheck = pos.checkers();
+
+		bool doLMR =
+			remainingDepth >= 3 &&
+			picker.pickedCnt() >= 3 &&
+			!isCapture &&
+			!givesCheck &&
+			!move.promotion() &&
+			!isCheck;
+
+		if (doLMR)
+		{
+			int depthReduction = int(0.75f + std::log(remainingDepth) * std::log(picker.pickedCnt()) / 2.25f);
+
+			// conduct null window search to check wether it raises alpha
+			eval = -negamax(pos, -alpha - 1, -alpha, ply + 1, maxDepth - depthReduction, searchInfo);
+
+			// research at full depth since it raised alpha
+			if (eval > alpha)
+			{
+				eval = -negamax(pos, -beta, -alpha, ply + 1, maxDepth, searchInfo);
+			}
+		}
+
+		else
+		{
+			eval = -negamax(pos, -beta, -alpha, ply + 1, maxDepth, searchInfo);
+		}
+
 		pos.undoMove();
 
 		if (eval > alpha)
@@ -162,13 +213,13 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 
 			newEntry.bound = TranspositionTable::MoveBound::Exact;
 			newEntry.bestMove = move;
-			newEntry.score = eval;
+			newEntry.score = scoreToTT(eval, ply);
 		}
 
 		if (alpha >= beta)
 		{
 			newEntry.bound = TranspositionTable::MoveBound::Lower;
-			newEntry.score = alpha;
+			newEntry.score = scoreToTT(alpha, ply);
 			newEntry.bestMove = move;
 
 			break; // beta cutoff
@@ -274,6 +325,8 @@ SearchResult search(Position& pos, int timeMs)
 		std::cout << "info depth " << currentMaxDepth
 			<< " score cp " << alpha
 			<< " nodes " << searchInfo.nodes
+			<< " time " << (std::chrono::duration<float>(Clock::now() - searchInfo.start).count()) << "s"
+			<< " NPS " << searchInfo.nodes / (std::chrono::duration<float>(Clock::now() - searchInfo.start).count())/1000000.0f << "M"
 			<< "\n";
 	}
 
