@@ -214,12 +214,54 @@ void Position::updatePinned()
     stateInfo().pinned = pinned;
 }
 
+void Position::doNullMove()
+{
+
+    const StateInfo& prevStateInfo = stateInfo();
+
+    // Save current state for undo/redo
+    StateInfo newStateInfo =
+    {
+        .castlingRights = prevStateInfo.castlingRights,
+        .halfMoveClock = uint8(prevStateInfo.halfMoveClock + 1),
+        .enPassantSquare = NoneSquare,
+        .capturedPiece = NonePiece,
+        .prevMove = Move::Null(),
+        .checkers = 0ULL,
+        .zobristKey = prevStateInfo.zobristKey,
+    };
+
+    std::memcpy(newStateInfo.material, prevStateInfo.material, sizeof(prevStateInfo.material));
+    
+    if (prevStateInfo.enPassantSquare != NoneSquare)
+    {
+        File epFile = fileOf(prevStateInfo.enPassantSquare);
+        newStateInfo.zobristKey ^= Zobrist::enPassant[epFile];
+        newStateInfo.zobristKey ^= Zobrist::enPassant[NoneFile];
+    }
+
+    m_fullMoveCounter += m_colorToMove;
+    m_colorToMove = ~m_colorToMove;
+    newStateInfo.zobristKey ^= Zobrist::side;
+
+    m_stateHistory.push_back(newStateInfo);
+
+    updatePinned();
+}
+
+void Position::undoNullMove()
+{
+    m_colorToMove = ~m_colorToMove;
+    m_fullMoveCounter -= m_colorToMove;
+    m_stateHistory.pop_back();
+}
+
 void Position::doMove(Move move)
 {
     Square src = move.src();
     Square dst = move.dst();
 
-    const StateInfo prevStateInfo = stateInfo();
+    const StateInfo& prevStateInfo = stateInfo();
 
     Piece srcPiece = m_pieces[src];
     PieceType srcType = pieceTypeOf(srcPiece);

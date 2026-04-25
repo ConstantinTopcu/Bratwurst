@@ -27,6 +27,7 @@ constexpr int MaxSearchDepth = 100;
 
 // Transposition table of size 256 MB
 TranspositionTable TT(256);
+Move killerMoves[MaxSearchDepth][2];
 
 // Helper functions to store scores in TT and probe it from TT
 inline int scoreToTT(int score, int ply) 
@@ -45,9 +46,13 @@ inline int scoreFromTT(int score, int ply)
 
 inline bool updateTime(SearchInfo& info)
 {
-	auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - info.start);
-	info.stopped = elapsed.count() >= info.timeMS * 0.95f; // 1 MS time buffer to cancel search
-	return info.stopped;
+
+	if ((info.nodes & 2047) == 0)
+	{
+		auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - info.start);
+		info.stopped = elapsed.count() >= info.timeMS * 0.95f; // 1 MS time buffer to cancel search
+		return info.stopped;
+	}
 }
 
 int quiescence(Position& pos, int alpha, int beta, int ply, int depth, SearchInfo& searchInfo)
@@ -56,16 +61,12 @@ int quiescence(Position& pos, int alpha, int beta, int ply, int depth, SearchInf
 
 	if (pos.isThreefoldRepetition(2)) return -10;
 
-	if ((searchInfo.nodes & 2047) == 0)
-	{    
-		updateTime(searchInfo);
-	}
+	updateTime(searchInfo);
 
 	if (searchInfo.stopped)
 	{
 		return -Evaluation::Infinity;
 	}
-
 
 	int standPat = Evaluation::evaluate(pos);
 
@@ -83,7 +84,7 @@ int quiescence(Position& pos, int alpha, int beta, int ply, int depth, SearchInf
 		return standPat;
 	}
 
-	MovePicker picker(pos, moves);
+	MovePicker picker(pos, moves, killerMoves[ply]);
 
 	while (picker.hasNext())
 	{
@@ -116,44 +117,34 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 	// check for 3 fold repetition
 	if (pos.isThreefoldRepetition(2)) return -10;
 
-	if ((searchInfo.nodes & 2047) == 0)
-	{
-		updateTime(searchInfo);
-	}
+	updateTime(searchInfo);
 
-	if (searchInfo.stopped)
-	{
-		// return -Infinity so the move won't be considered
-		return -Evaluation::Infinity;
-	}
+	// return -Infinity so the move won't be considered
+	if (searchInfo.stopped) return -Evaluation::Infinity;
 
 	// Check for position in transposition table
-	const TranspositionTable::TTEntry* entry = TT.probe(pos.zobristKey());
-	Move ttMove = (entry != nullptr) ? entry->bestMove : Move::Null();
+	const TranspositionTable::TTEntry* ttEntry = TT.probe(pos.zobristKey());
+	Move ttMove = (ttEntry != nullptr) ? ttEntry->bestMove : Move::Null();
 
-	if (entry != nullptr && entry->depth >= remainingDepth)
+	if (ttEntry != nullptr && ttEntry->depth >= remainingDepth)
 	{
 		using enum TranspositionTable::MoveBound;
 
-		int ttScore = scoreFromTT(entry->score, ply);
-		if (entry->bound == Lower) alpha = std::max(alpha, ttScore);
-		if (entry->bound == Upper) beta = std::min(beta, ttScore);
-		if (entry->bound == Exact) return ttScore;
+		int ttScore = scoreFromTT(ttEntry->score, ply);
+		if (ttEntry->bound == Lower) alpha = std::max(alpha, ttScore);
+		if (ttEntry->bound == Upper) beta = std::min(beta, ttScore);
+		if (ttEntry->bound == Exact) return ttScore;
 		if (alpha >= beta) return ttScore;
 	}
 
 	if (ply == maxDepth)
-	{
 		return quiescence(pos, alpha, beta, ply + 1, ply + MaxQuiescenceDepth, searchInfo);
-	}
 
 	auto moves = generateMoves<GenType::All>(pos);
-	
+
+	// check for stalemate/checkmate
 	if (moves.empty())
-	{
-		// Checkmate in ply
 		return (pos.checkers()) ? -Evaluation::CheckMate + ply : Evaluation::StaleMate;
-	}
 	
 	TranspositionTable::TTEntry newEntry =
 	{
@@ -164,7 +155,7 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 		.depth		= remainingDepth
 	};
 
-	MovePicker picker(pos, moves, ttMove);
+	MovePicker picker(pos, moves, killerMoves[ply], ttMove);
 
 	while (picker.hasNext())
 	{
@@ -222,6 +213,12 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 			newEntry.score = scoreToTT(alpha, ply);
 			newEntry.bestMove = move;
 
+			if (!isCapture && killerMoves[ply][0] != move)
+			{
+				killerMoves[ply][1] = killerMoves[ply][0];
+				killerMoves[ply][0] = move;
+			}
+
 			break; // beta cutoff
 		}
 	}
@@ -254,6 +251,12 @@ SearchResult search(Position& pos, int timeMs)
 	};
 
 	MoveList moves = generateMoves<GenType::All>(pos);
+
+	for (int ply = 0; ply < MaxSearchDepth; ply++)
+	{
+		killerMoves[ply][0] = Move::Null();
+		killerMoves[ply][1] = Move::Null();
+	}
 
 	// make sure game hasnt terminated yet
 	if (moves.empty()) return searchResult;
@@ -290,7 +293,7 @@ SearchResult search(Position& pos, int timeMs)
 			.depth		= currentMaxDepth
 		};
 
-		MovePicker picker(pos, moves, TTMove);
+		MovePicker picker(pos, moves, killerMoves[0], TTMove);
 
 		while (picker.hasNext())
 		{

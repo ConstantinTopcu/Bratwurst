@@ -5,19 +5,19 @@
 namespace Bratwurst::Search
 {
 
-int score_move(const Position& pos, Move move);
+int score_move(const Position& pos, Move move, Move* killers);
 
 // Helper for efficient lazy select for from MoveList
 class MovePicker
 {
 public:
-	inline MovePicker(const Position& pos, MoveList& moves, Move bestMove = Move::Null()) noexcept
+	inline MovePicker(const Position& pos, MoveList& moves, Move* killers, Move bestMove = Move::Null()) noexcept
 		: m_moves(moves)
 		, m_index(0)
 	{
 		for (int i = 0; i < moves.size(); i++)
 		{
-			m_evals[i] = (moves[i] == bestMove) ? Evaluation::Infinity : score_move(pos, moves[i]);
+			m_evals[i] = (moves[i] == bestMove) ? Evaluation::Infinity : score_move(pos, moves[i], killers);
 		}
 	}
 

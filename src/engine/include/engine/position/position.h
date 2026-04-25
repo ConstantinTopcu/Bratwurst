@@ -50,6 +50,10 @@ public:
 
 	void doMove(Move move);
 	void undoMove();
+
+	void doNullMove();
+	void undoNullMove();
+
 	void clear();
 
 	// avoid this function when incremental, manual updates are possible, 
