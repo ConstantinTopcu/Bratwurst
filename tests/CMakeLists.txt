@@ -7,13 +7,9 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(catch2)
 
-add_executable(Tests
-    "test_main.cpp"
-    "square_test.cpp"
-    "piece_test.cpp"
-    "bitboard_test.cpp" "position_test.cpp" "precomputed_test.cpp")
+add_executable(Tests  "perft.cpp")
 
-target_link_libraries(Tests PRIVATE BratwurstEngine Catch2::Catch2WithMain)
+target_link_libraries(Tests PUBLIC Engine Catch2::Catch2WithMain)
 
 include(Catch)
 catch_discover_tests(Tests)

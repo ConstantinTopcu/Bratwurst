@@ -15,14 +15,16 @@ Move Move::fromString(const std::string& str, const Position& pos)
 	if (str.size() == 5)
 	{
 		Flag flag;
+
 		switch (str[4])
 		{
-		case 'n': flag = Flag::KnightPromotion; break;
-		case 'b': flag = Flag::BishopPromotion; break;
-		case 'r': flag = Flag::RookPromotion;   break;
-		case 'q': flag = Flag::QueenPromotion;  break;
-		default: ASSERT(false);
+			case 'n': flag = Flag::KnightPromotion; break;
+			case 'b': flag = Flag::BishopPromotion; break;
+			case 'r': flag = Flag::RookPromotion;   break;
+			case 'q': flag = Flag::QueenPromotion;  break;
+			default: ASSERT(false);
 		}
+
 		return Move(src, dst, flag);
 	}
 
@@ -45,11 +47,11 @@ std::string Move::toString() const
 	{
 		switch (flag())
 		{
-		case Flag::KnightPromotion: str += 'n'; break;
-		case Flag::BishopPromotion: str += 'b'; break;
-		case Flag::RookPromotion:   str += 'r'; break;
-		case Flag::QueenPromotion:  str += 'q'; break;
-		default: break;
+			case Flag::KnightPromotion: str += 'n'; break;
+			case Flag::BishopPromotion: str += 'b'; break;
+			case Flag::RookPromotion:   str += 'r'; break;
+			case Flag::QueenPromotion:  str += 'q'; break;
+			default: break;
 		}
 	}
 

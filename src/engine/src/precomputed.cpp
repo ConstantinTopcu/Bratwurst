@@ -126,17 +126,17 @@ void init()
 		// add white pawn shield
 		if (r != Rank8)
 		{
-			pawnShieldMask[White][s] |= squareMask(s + Up);
-			if (f != FileA) pawnShieldMask[White][s] |= squareMask(s + UpLeft);
-			if (f != FileH) pawnShieldMask[White][s] |= squareMask(s + UpRight);
+			pawnShieldMask[White][s] |= bb(s + Up);
+			if (f != FileA) pawnShieldMask[White][s] |= bb(s + UpLeft);
+			if (f != FileH) pawnShieldMask[White][s] |= bb(s + UpRight);
 		}
 
 		// add black pawn shield
 		if (r != Rank1)
 		{
-			pawnShieldMask[Black][s] |= squareMask(s + Down);
-			if (f != FileA) pawnShieldMask[Black][s] |= squareMask(s + DownLeft);
-			if (f != FileH) pawnShieldMask[Black][s] |= squareMask(s + DownRight);
+			pawnShieldMask[Black][s] |= bb(s + Down);
+			if (f != FileA) pawnShieldMask[Black][s] |= bb(s + DownLeft);
+			if (f != FileH) pawnShieldMask[Black][s] |= bb(s + DownRight);
 		}
 	}
 
@@ -147,15 +147,15 @@ void init()
 			lineBBs[0][s][s2] = 0ULL;
 			lineBBs[1][s][s2] = 0ULL;
 
-			if (pseudoAttacks[Queen][s] & squareMask(s2))
+			if (pseudoAttacks[Queen][s] & bb(s2))
 			{
-				bool isDiagonal = (pseudoAttacks[Bishop][s] & squareMask(s2));
+				bool isDiagonal = (pseudoAttacks[Bishop][s] & bb(s2));
 				PieceType pt = isDiagonal ? Bishop : Rook;
 
-				lineBBs[0][s][s2] = (pseudoAttacks[pt][s] & pseudoAttacks[pt][s2]) | squareMask(s) | squareMask(s2);
+				lineBBs[0][s][s2] = (pseudoAttacks[pt][s] & pseudoAttacks[pt][s2]) | bb(s) | bb(s2);
 				lineBBs[1][s][s2] = ((isDiagonal) ? 
-					attacksBB<Bishop>(s, squareMask(s2)) & attacksBB<Bishop>(s2, squareMask(s)) : 
-					attacksBB<Rook>(s, squareMask(s2)) & attacksBB<Rook>(s2, squareMask(s)));
+					attacksBB<Bishop>(s, bb(s2)) & attacksBB<Bishop>(s2, bb(s)) : 
+					attacksBB<Rook>(s, bb(s2)) & attacksBB<Rook>(s2, bb(s)));
 			}
 		}
 	}

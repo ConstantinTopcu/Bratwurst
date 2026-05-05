@@ -3,7 +3,6 @@
 #include <engine/core/core.h>
 
 #include <engine/types/castling_right.h>
-#include <engine/types/static_vector.h>
 #include <engine/types/bitboard.h>
 #include <engine/types/square.h>
 #include <engine/types/piece.h>
@@ -71,9 +70,9 @@ public:
 	[[nodiscard]] inline Piece pieceOn(Square s) const;
 	[[nodiscard]] inline Square kingSquare(Color c) const;
 
-	inline Bitboard checkers() const { return stateInfo().checkers; }
-	inline Bitboard pinned() const { return stateInfo().pinned; }
-	inline Bitboard attackers(Square s, Color attackingColor, Bitboard blockers) const;
+	[[nodiscard]] inline Bitboard checkers() const { return stateInfo().checkers; }
+	[[nodiscard]] inline Bitboard pinned() const { return stateInfo().pinned; }
+	[[nodiscard]] inline Bitboard attackers(Square s, Color attackingColor, Bitboard blockers) const;
 
 	[[nodiscard]] inline Color colorToMove() const { return m_colorToMove; }
 	[[nodiscard]] inline uint16 fullMoveCounter() const { return m_fullMoveCounter; }
@@ -225,7 +224,7 @@ inline void Position::movePiece(Square src, Square dst, Piece srcPiece)
 	m_egPSQT += Evaluation::eg(dstEntry) - Evaluation::eg(srcEntry);
 
 	// move the actuall piece
-	Bitboard moveMask = squareMask(src) | squareMask(dst);
+	Bitboard moveMask = bb(src) | bb(dst);
 
 	m_colorBBs[colorOf(srcPiece)] ^= moveMask;
 	m_typeBBs[pieceTypeOf(srcPiece)] ^= moveMask;
@@ -251,7 +250,7 @@ inline void Position::placePiece(Square s, Piece piece)
 	m_material += Evaluation::PieceValue[piece];
 
 	// place Piece
-	Bitboard mask = squareMask(s);
+	Bitboard mask = bb(s);
 	m_colorBBs[colorOf(piece)] |= mask;
 	m_typeBBs[pt] |= mask;
 	m_pieces[s] = piece;
@@ -274,7 +273,7 @@ inline void Position::removePiece(Square s, Piece piece)
 	m_material -= Evaluation::PieceValue[piece];
 
 	// remove piece
-	Bitboard mask = squareMask(s);
+	Bitboard mask = bb(s);
 	m_colorBBs[colorOf(piece)] ^= mask;
 	m_typeBBs[pt] ^= mask;
 	m_pieces[s] = NonePiece;

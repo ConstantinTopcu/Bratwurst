@@ -69,17 +69,25 @@ namespace Bratwurst::UCI
 	static void go(const std::vector<std::string>& tokens)
 	{
 		int movetime = -1;
+		int perftDepth = -1;
 		int wtime = -1, btime = -1;
 		int winc = 0, binc = 0;
 
 		for (size_t i = 1; i < tokens.size(); i++)
 		{
-			if (tokens[i] == "perft") { /* ... */ }
-			if (tokens[i] == "movetime") movetime = std::stoi(tokens[i + 1]);
-			if (tokens[i] == "wtime")    wtime = std::stoi(tokens[i + 1]);
-			if (tokens[i] == "btime")    btime = std::stoi(tokens[i + 1]);
-			if (tokens[i] == "winc")     winc = std::stoi(tokens[i + 1]);
-			if (tokens[i] == "binc")     binc = std::stoi(tokens[i + 1]);
+			if (tokens[i] == "perft" && i + 1 < tokens.size()) perftDepth = std::stoi(tokens[++i]);
+			else if (tokens[i] == "movetime" && i + 1 < tokens.size()) movetime = std::stoi(tokens[++i]);
+			else if (tokens[i] == "wtime" && i + 1 < tokens.size())    wtime = std::stoi(tokens[++i]);
+			else if (tokens[i] == "btime" && i + 1 < tokens.size())    btime = std::stoi(tokens[++i]);
+			else if (tokens[i] == "winc" && i + 1 < tokens.size())     winc = std::stoi(tokens[++i]);
+			else if (tokens[i] == "binc" && i + 1 < tokens.size())     binc = std::stoi(tokens[++i]);
+		}
+
+		if (perftDepth >= 0)
+		{
+			std::size_t nodes = Perft::perft(pos, perftDepth, true);
+			std::cout << "nodes " << nodes << "\n";
+			return;
 		}
 
 		if (movetime == -1)

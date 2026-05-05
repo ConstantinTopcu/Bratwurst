@@ -33,8 +33,7 @@ struct Move
 		QueenPromotion = 0b0111
 	};
 
-	constexpr Move(Square src = A1, Square dst = A1, Flag flag = Flag::None) 
-		: data(src | (dst << 6) | (flag << 12))	{ }
+	constexpr Move(Square src = A1, Square dst = A1, Flag flag = Flag::None) : data(src | (dst << 6) | (flag << 12)) { }
 	static constexpr Move Null() { return Move(A1, A1, Flag::None); }
 
 	constexpr Square src() const  { return static_cast<Square>(data & 0b111111); }

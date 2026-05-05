@@ -13,7 +13,7 @@ namespace Bratwurst
 
 using Bitboard = uint64;
 
-constexpr Bitboard squareMask(Square s) 
+constexpr Bitboard bb(Square s) 
 {
 	ASSERT(isValid(s));
 	return 1ULL << s;
@@ -78,7 +78,7 @@ inline Square popMsb(Bitboard& mask)
 {
 	ASSERT(mask != 0ULL);
 	const Square square = msb(mask);
-	mask &= mask ^ squareMask(square);
+	mask &= mask ^ bb(square);
 	return square;
 }
 

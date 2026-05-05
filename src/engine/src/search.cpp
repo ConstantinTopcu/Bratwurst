@@ -25,8 +25,7 @@ struct SearchInfo
 constexpr int MaxQuiescenceDepth = 20;
 constexpr int MaxSearchDepth = 100;
 
-// Transposition table of size 256 MB
-TranspositionTable TT(256);
+TranspositionTable TT(256); // 256 MB
 Move killerMoves[MaxSearchDepth][2];
 
 // Helper functions to store scores in TT and probe it from TT
@@ -46,7 +45,6 @@ inline int scoreFromTT(int score, int ply)
 
 inline bool updateTime(SearchInfo& info)
 {
-
 	if ((info.nodes & 2047) == 0)
 	{
 		auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - info.start);
@@ -77,7 +75,7 @@ int quiescence(Position& pos, int alpha, int beta, int ply, int depth, SearchInf
 
 	alpha = std::max(alpha, standPat);
 
-	MoveList moves = generateMoves<GenType::Captures>(pos);
+	MoveList moves = generateMoves<GenType::Quiescence>(pos);
 
 	if (moves.empty())
 	{
@@ -263,17 +261,19 @@ SearchResult search(Position& pos, int timeMs)
 
 	for (int currentMaxDepth = 1; currentMaxDepth <= 100; currentMaxDepth++)
 	{
-		int alpha = -Evaluation::Infinity;
-		Move bestIterMove = moves[0];
-
 		const TranspositionTable::TTEntry* entry = TT.probe(pos.zobristKey());
 		Move TTMove = (entry) ? entry->bestMove : Move::Null();
+		int alpha = -Evaluation::Infinity;
+		Move bestIterMove = moves[0];
 
 		if (entry != nullptr && entry->depth >= currentMaxDepth)
 		{
 			using enum TranspositionTable::MoveBound;
 
-			if (entry->bound == Lower) alpha = std::max(alpha, entry->score);
+			if (entry->bound == Lower)
+			{
+				alpha = std::max(alpha, entry->score);
+			}
 
 			if (entry->bound == Exact)
 			{
@@ -298,6 +298,7 @@ SearchResult search(Position& pos, int timeMs)
 		while (picker.hasNext())
 		{
 			searchInfo.nodes++;
+
 			Move move = picker.pick();
 
 			pos.doMove(move);

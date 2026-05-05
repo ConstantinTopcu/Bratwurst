@@ -10,10 +10,8 @@ namespace Bratwurst
 
 enum GenType
 {
-	Captures = 1 << 0,
-	Quiets = 1 << 1,
-	Promotions = 1 << 2,
-	All = Captures | Quiets | Promotions,
+	All,
+	Quiescence
 };
 
 template<GenType>

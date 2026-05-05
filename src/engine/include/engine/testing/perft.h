@@ -3,10 +3,13 @@
 #include <engine/position/position.h>
 #include <engine/move_gen/move_gen.h>
 
+#include <cstddef>
+#include <iostream>
+
 namespace Bratwurst::Perft
 {
 
-size_t perft(Position& pos, int depth, bool print = false)
+inline std::size_t perft(Position& pos, int depth, bool print = false)
 {
 	if (depth == 0) return 1;
 

@@ -12,7 +12,7 @@ void Position::clear()
     std::fill(m_typeBBs, m_typeBBs + PieceTypeNum, 0ULL);
     std::fill(m_colorBBs, m_colorBBs + ColorNum, 0ULL);
 
-    while (!m_stateHistory.empty()) m_stateHistory.pop_back();
+    while (!m_stateHistory.empty()) m_stateHistory.pop();
 
     m_colorToMove = NoneColor;
     m_fullMoveCounter = 0;
@@ -31,7 +31,7 @@ std::expected<Position, Position::FenError> Position::fromFEN(const std::string&
     Position pos;
     pos.clear();
 
-    pos.m_stateHistory.emplace_back();
+    pos.m_stateHistory.emplace();
     StateInfo& currentStateInfo = pos.m_stateHistory.back();
 
     // split FEN into its 6 components
@@ -244,7 +244,7 @@ void Position::doNullMove()
     m_colorToMove = ~m_colorToMove;
     newStateInfo.zobristKey ^= Zobrist::side;
 
-    m_stateHistory.push_back(newStateInfo);
+    m_stateHistory.push(newStateInfo);
 
     updatePinned();
 }
@@ -253,7 +253,7 @@ void Position::undoNullMove()
 {
     m_colorToMove = ~m_colorToMove;
     m_fullMoveCounter -= m_colorToMove;
-    m_stateHistory.pop_back();
+    m_stateHistory.pop();
 }
 
 void Position::doMove(Move move)
@@ -387,7 +387,7 @@ void Position::doMove(Move move)
     m_colorToMove = enemy;
     newStateInfo.zobristKey ^= Zobrist::side;
 
-    m_stateHistory.push_back(newStateInfo);
+    m_stateHistory.push(newStateInfo);
 
     updateCheckers();
     updatePinned();
@@ -452,6 +452,6 @@ void Position::undoMove()
 
     m_fullMoveCounter -= friendly;
     m_colorToMove = friendly;
-    m_stateHistory.pop_back();
+    m_stateHistory.pop();
 }
 }

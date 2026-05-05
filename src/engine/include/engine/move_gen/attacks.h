@@ -32,7 +32,7 @@ constexpr Bitboard dynamicAttacks(Square s, const std::span<const int[2]> direct
 		while (isValid(r + dy * excludeEdges) && isValid(f + dx * excludeEdges))
 		{
 			Square dst = makeSquare(f, r);
-			Bitboard mask = squareMask(dst);
+			Bitboard mask = bb(dst);
 			attacks |= mask;
 
 			if constexpr (!sliding) break;
