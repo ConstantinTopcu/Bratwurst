@@ -89,10 +89,7 @@ inline int evalMobility(const Position& pos)
 inline int evaluate(const Position& pos)
 {
 	Color c = pos.colorToMove();
-
 	const int phase = pos.phase();
-
-	// Evaluate Material
 	const int materialEval = pos.material();
 
 	// PSQT bonus

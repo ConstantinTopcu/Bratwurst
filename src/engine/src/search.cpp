@@ -49,16 +49,16 @@ inline bool updateTime(SearchInfo& info)
 	{
 		auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - info.start);
 		info.stopped = elapsed.count() >= info.timeMS * 0.95f; // 1 MS time buffer to cancel search
-		return info.stopped;
 	}
+
+	return info.stopped;
 }
 
 int quiescence(Position& pos, int alpha, int beta, int ply, int depth, SearchInfo& searchInfo)
 {
 	searchInfo.nodes++;
 
-	if (pos.isThreefoldRepetition(2)) return -10;
-
+	// make sure search hasnt been cancelled yet
 	updateTime(searchInfo);
 
 	if (searchInfo.stopped)
@@ -66,8 +66,10 @@ int quiescence(Position& pos, int alpha, int beta, int ply, int depth, SearchInf
 		return -Evaluation::Infinity;
 	}
 
-	int standPat = Evaluation::evaluate(pos);
+	// check for draw
+	if (pos.isThreefoldRepetition(2)) return 0;
 
+	int standPat = Evaluation::evaluate(pos);
 	if (standPat >= beta || ply == depth)
 	{
 		return standPat;
@@ -112,13 +114,12 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 
 	int remainingDepth = maxDepth - ply;
 
-	// check for 3 fold repetition
-	if (pos.isThreefoldRepetition(2)) return -10;
-
+	// check for search cancellation
 	updateTime(searchInfo);
-
-	// return -Infinity so the move won't be considered
 	if (searchInfo.stopped) return -Evaluation::Infinity;
+
+	// check for 3 fold repetition
+	if (pos.isThreefoldRepetition(2)) return 0;
 
 	// Check for position in transposition table
 	const TranspositionTable::TTEntry* ttEntry = TT.probe(pos.zobristKey());
@@ -127,7 +128,6 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 	if (ttEntry != nullptr && ttEntry->depth >= remainingDepth)
 	{
 		using enum TranspositionTable::MoveBound;
-
 		int ttScore = scoreFromTT(ttEntry->score, ply);
 		if (ttEntry->bound == Lower) alpha = std::max(alpha, ttScore);
 		if (ttEntry->bound == Upper) beta = std::min(beta, ttScore);
@@ -135,15 +135,16 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 		if (alpha >= beta) return ttScore;
 	}
 
-	if (ply == maxDepth)
-		return quiescence(pos, alpha, beta, ply + 1, ply + MaxQuiescenceDepth, searchInfo);
+	if (ply == maxDepth) return quiescence(pos, alpha, beta, ply + 1, ply + MaxQuiescenceDepth, searchInfo);
 
 	auto moves = generateMoves<GenType::All>(pos);
 
 	// check for stalemate/checkmate
 	if (moves.empty())
+	{
 		return (pos.checkers()) ? -Evaluation::CheckMate + ply : Evaluation::StaleMate;
-	
+	}
+
 	TranspositionTable::TTEntry newEntry =
 	{
 		.key		= pos.zobristKey(),
@@ -155,32 +156,34 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 
 	MovePicker picker(pos, moves, killerMoves[ply], ttMove);
 
+	bool isCheck = pos.checkers();
+	int eval = -Evaluation::Infinity;
+
 	while (picker.hasNext())
 	{
 		Move move = picker.pick();
-		int eval;
 
-		bool isCheck = pos.checkers();
+		Piece movingPiece = pos.pieceOn(move.src());
+		Piece capturedPiece = pos.pieceOn(move.dst());
+		bool isCapture = capturedPiece != NonePiece || move.enPassant();
 
 		pos.doMove(move);
 
-		bool isCapture = pos.stateInfo().capturedPiece != NonePiece;
 		bool givesCheck = pos.checkers();
 
 		bool doLMR =
 			remainingDepth >= 3 &&
 			picker.pickedCnt() >= 3 &&
-			!isCapture &&
-			!givesCheck &&
-			!move.promotion() &&
-			!isCheck;
+			!isCapture && !givesCheck &&
+			!move.promotion() && !isCheck;
 
 		if (doLMR)
 		{
 			int depthReduction = int(0.75f + std::log(remainingDepth) * std::log(picker.pickedCnt()) / 2.25f);
+			int nullWindowDepth = maxDepth - depthReduction;
 
 			// conduct null window search to check wether it raises alpha
-			eval = -negamax(pos, -alpha - 1, -alpha, ply + 1, maxDepth - depthReduction, searchInfo);
+			eval = -negamax(pos, -alpha - 1, -alpha, ply + 1, nullWindowDepth, searchInfo);
 
 			// research at full depth since it raised alpha
 			if (eval > alpha)
@@ -189,6 +192,7 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 			}
 		}
 
+		// fullwindow search at full depth
 		else
 		{
 			eval = -negamax(pos, -beta, -alpha, ply + 1, maxDepth, searchInfo);
@@ -300,9 +304,10 @@ SearchResult search(Position& pos, int timeMs)
 			searchInfo.nodes++;
 
 			Move move = picker.pick();
+			int eval;
 
 			pos.doMove(move);
-			int eval = -negamax(pos, -Evaluation::Infinity, -alpha, 1, currentMaxDepth, searchInfo);
+			eval = -negamax(pos, -Evaluation::Infinity, -alpha, 0, currentMaxDepth, searchInfo);
 			pos.undoMove();
 
 			if (searchInfo.stopped) break;
@@ -314,7 +319,7 @@ SearchResult search(Position& pos, int timeMs)
 
 				newEntry.bound = TranspositionTable::MoveBound::Exact;
 				newEntry.bestMove = move;
-				newEntry.score = eval;
+				newEntry.score = eval;	
 			}
 		}
 
