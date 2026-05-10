@@ -176,6 +176,7 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 	}
 	
 	MovePicker picker(pos, moves, killerMoves[ply], ttMove);
+	int staticEval = Evaluation::evaluate(pos);
 	int eval = -Evaluation::Infinity;
 
 	while (picker.hasNext())
@@ -186,13 +187,32 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 		Piece capturedPiece = pos.pieceOn(move.dst());
 		bool isCapture = capturedPiece != NonePiece || move.enPassant();
 
+		pos.doMove(move);
+
+		bool givesCheck = pos.checkers();
+
+		// Futility Pruning
+		if (remainingDepth <= 3 
+			&& !isCapture  && !move.promotion() 
+			&& !isCheck  && !givesCheck
+			&& std::abs(alpha) < Evaluation::CheckMate - MaxSearchDepth)
+		{
+			static constexpr int futilityMargin[4] = { 0, 100, 200, 400 }; // in centipawns
+			int margin = futilityMargin[remainingDepth];
+
+			// if the static evaluation plus a margin is still below alpha, then this move is unlikely to raise alpha and can be pruned
+			if (staticEval + margin < alpha)
+			{
+				pos.undoMove();
+				continue;
+			}
+		}
+
 		bool doLMR =
 			remainingDepth >= 3 &&
 			picker.pickedCnt() >= 3 &&
 			!isCapture && !pos.checkers() &&
 			!move.promotion() && !isCheck;
-
-		pos.doMove(move);
 
 		if (doLMR)
 		{
