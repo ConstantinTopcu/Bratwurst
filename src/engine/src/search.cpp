@@ -123,17 +123,17 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 	if (pos.isThreefoldRepetition(2)) return 0;
 
 	// Check for position in transposition table
+	using enum TranspositionTable::MoveBound;
 	const TranspositionTable::TTEntry* ttEntry = TT.probe(pos.zobristKey());
 	Move ttMove = (ttEntry != nullptr) ? ttEntry->bestMove : Move::Null();
 
 	if (ttEntry != nullptr && ttEntry->depth >= remainingDepth)
 	{
-		using enum TranspositionTable::MoveBound;
 		int ttScore = scoreFromTT(ttEntry->score, ply);
 		if (ttEntry->bound == Lower) alpha = std::max(alpha, ttScore);
 		if (ttEntry->bound == Upper) beta = std::min(beta, ttScore);
 		if (ttEntry->bound == Exact) return ttScore;
-		if (alpha >= beta) return ttScore;
+		if (alpha >= beta) return alpha;
 	}
 
 	if (ply == maxDepth) return quiescence(pos, alpha, beta, ply + 1, ply + MaxQuiescenceDepth, searchInfo);
@@ -155,9 +155,27 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 		.depth		= remainingDepth
 	};
 
-	MovePicker picker(pos, moves, killerMoves[ply], ttMove);
-
 	bool isCheck = pos.checkers();
+	bool nullMoveAllowed = pos.stateInfo().prevMove != Move::Null();
+
+	// Null Move Pruning
+	if (nullMoveAllowed && pos.phase() >= 2 && !isCheck && remainingDepth > 3)
+	{
+		int reduction = 3 + remainingDepth / 6;
+		int NMPDepth = std::max(ply + 1, maxDepth - reduction);
+
+		pos.doNullMove();
+		int nullEval = -negamax(pos, -beta, -beta + 1, ply + 1, NMPDepth, searchInfo);
+		pos.undoNullMove();
+
+		// if you skip your turn and you still fail high, 
+		// then this position is too good for you 
+		// and the opponent won't let you reach it, 
+		// so you can safely prune it
+		if (nullEval >= beta) return beta;
+	}
+	
+	MovePicker picker(pos, moves, killerMoves[ply], ttMove);
 	int eval = -Evaluation::Infinity;
 
 	while (picker.hasNext())
@@ -202,14 +220,14 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 		{
 			alpha = eval;
 
-			newEntry.bound = TranspositionTable::MoveBound::Exact;
+			newEntry.bound = Exact;
 			newEntry.bestMove = move;
 			newEntry.score = scoreToTT(eval, ply);
 		}
 
 		if (alpha >= beta)
 		{
-			newEntry.bound = TranspositionTable::MoveBound::Lower;
+			newEntry.bound = Lower;
 			newEntry.score = scoreToTT(alpha, ply);
 			newEntry.bestMove = move;
 
@@ -268,7 +286,7 @@ SearchResult search(Position& pos, int timeMs)
 		return searchResult;
 	}
 
-	int prevIterationEval;
+	int prevIterationEval = 0;
 
 	for (int currentMaxDepth = 1; currentMaxDepth <= 100; currentMaxDepth++)
 	{
@@ -314,7 +332,6 @@ SearchResult search(Position& pos, int timeMs)
 
 			while (picker.hasNext())
 			{
-				searchInfo.nodes++;
 				Move move = picker.pick();
 
 				pos.doMove(move);
