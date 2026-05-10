@@ -211,7 +211,10 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 
 		else
 		{
-			eval = -negamax(pos, -beta, -alpha, ply + 1, maxDepth, searchInfo);
+			// check extensions
+			int extension = pos.checkers() ? 1 : 0;
+
+			eval = -negamax(pos, -beta, -alpha, ply + 1, maxDepth + extension, searchInfo);
 		}
 
 		pos.undoMove();
