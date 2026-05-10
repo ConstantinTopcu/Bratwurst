@@ -1,7 +1,9 @@
 #pragma once
 
-#include <engine/types/piece.h>
+#include <engine/types/types.h>
 #include <engine/core/core.h>
+
+#include <iostream>
 
 namespace Bratwurst::Evaluation
 {
@@ -52,6 +54,8 @@ constexpr int32 S(int16 mg, int16 eg)
 {
     return (int32(mg) << 16) | uint16(eg);
 }
+
+static Bitboard passedPawnMasks[ColorNum][SquareNum];
 
 // values from PeSTO evaluation function
 inline constexpr int32 PSQT[PieceNum][SquareNum] =
@@ -210,6 +214,24 @@ inline int16 mg(int32 x)
 inline int16 eg(int32 x)
 {
     return (int16)(x & 0xFFFF);
+}
+
+inline void init()
+{
+	// init passed pawn masks
+    for (Square sq = A1; sq < SquareNum; sq++)
+    {
+		File f = fileOf(sq);
+		File lf = std::max(FileA, File(f - 1));
+		File rf = std::min(FileH, File(f + 1));
+
+		Rank r = rankOf(sq);
+
+		Bitboard filesBB = (fileMask(lf) | fileMask(f) | fileMask(rf));
+
+		passedPawnMasks[White][sq] = filesBB << (r + 1) * FileNum;
+		passedPawnMasks[Black][sq] = filesBB >> (Rank8 - r + 1) * FileNum;
+    }
 }
 
 }

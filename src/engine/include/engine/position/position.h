@@ -84,6 +84,7 @@ public:
 	[[nodiscard]] inline Move prevMove() const { return stateInfo().prevMove; }
 
 	[[nodiscard]] inline bool isThreefoldRepetition(int repCnt = 3) const;
+	[[nodiscard]] inline bool isFiftyMoveRule() const { return halfmoveClock() >= 100; }
 
 	[[nodiscard]] inline Zobrist::Key zobristKey() const { return stateInfo().zobristKey; }
 	[[nodiscard]] inline int material() const { return m_material; }

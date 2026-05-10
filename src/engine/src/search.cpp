@@ -16,6 +16,7 @@ using Clock = std::chrono::high_resolution_clock;
 
 struct SearchInfo
 {
+	float aspirationWindowFailPercantage;
 	Clock::time_point start;
 	bool stopped = false;
 	int timeMS = 0;
@@ -167,32 +168,29 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 		Piece capturedPiece = pos.pieceOn(move.dst());
 		bool isCapture = capturedPiece != NonePiece || move.enPassant();
 
-		pos.doMove(move);
-
-		bool givesCheck = pos.checkers();
-
 		bool doLMR =
 			remainingDepth >= 3 &&
 			picker.pickedCnt() >= 3 &&
-			!isCapture && !givesCheck &&
+			!isCapture && !pos.checkers() &&
 			!move.promotion() && !isCheck;
+
+		pos.doMove(move);
 
 		if (doLMR)
 		{
 			int depthReduction = int(0.75f + std::log(remainingDepth) * std::log(picker.pickedCnt()) / 2.25f);
-			int nullWindowDepth = maxDepth - depthReduction;
+			int nullWindowDepth = std::max(ply + 1, maxDepth - depthReduction);
 
 			// conduct null window search to check wether it raises alpha
 			eval = -negamax(pos, -alpha - 1, -alpha, ply + 1, nullWindowDepth, searchInfo);
 
-			// research at full depth since it raised alpha
 			if (eval > alpha)
 			{
+				// research at full depth since it raised alpha
 				eval = -negamax(pos, -beta, -alpha, ply + 1, maxDepth, searchInfo);
 			}
 		}
 
-		// fullwindow search at full depth
 		else
 		{
 			eval = -negamax(pos, -beta, -alpha, ply + 1, maxDepth, searchInfo);
@@ -233,114 +231,164 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 	return alpha;
 }
 
-
 SearchResult search(Position& pos, int timeMs)
 {
-	SearchInfo searchInfo =  
+	SearchInfo searchInfo =
 	{
-		.start		= Clock::now(),
-		.stopped	= false, 
-		.timeMS		= timeMs, 
-		.nodes		= 0 
+		.start = Clock::now(),
+		.stopped = false,
+		.timeMS = timeMs,
+		.nodes = 0
 	};
 
-	SearchResult searchResult = 
-	{ 
-		.evaluation	= -Evaluation::Infinity,
-		.bestMove	= Move::Null(),
-		.nodes		= 0, 
-		.depth		= 0
+	SearchResult searchResult =
+	{
+		.evaluation = -Evaluation::Infinity,
+		.bestMove = Move::Null(),
+		.nodes = 0,
+		.depth = 0
 	};
+
+	// shift killer moves down the stack and clear the top level
+	for (int ply = 0; ply < MaxSearchDepth - 1; ply++)
+	{
+		killerMoves[ply][0] = killerMoves[ply + 1][0];
+		killerMoves[ply][1] = killerMoves[ply + 1][1];
+	}
+
+	killerMoves[MaxSearchDepth - 1][0] = Move::Null();
+	killerMoves[MaxSearchDepth - 1][1] = Move::Null();
 
 	MoveList moves = generateMoves<GenType::All>(pos);
 
-	for (int ply = 0; ply < MaxSearchDepth; ply++)
+	// check for stalemate/checkmate
+	if (moves.empty())
 	{
-		killerMoves[ply][0] = Move::Null();
-		killerMoves[ply][1] = Move::Null();
+		searchResult.evaluation = pos.checkers() ? -Evaluation::CheckMate : Evaluation::StaleMate;
+		return searchResult;
 	}
 
-	// make sure game hasnt terminated yet
-	if (moves.empty()) return searchResult;
+	int prevIterationEval;
 
 	for (int currentMaxDepth = 1; currentMaxDepth <= 100; currentMaxDepth++)
 	{
+		// check for fitting transposition table entry with sufficient depth
+		using Bound = TranspositionTable::MoveBound;
 		const TranspositionTable::TTEntry* entry = TT.probe(pos.zobristKey());
 		Move TTMove = (entry) ? entry->bestMove : Move::Null();
-		int alpha = -Evaluation::Infinity;
 		Move bestIterMove = moves[0];
 
-		if (entry != nullptr && entry->depth >= currentMaxDepth)
+		if (entry != nullptr && entry->depth >= currentMaxDepth && entry->bound == Bound::Exact)
 		{
-			using enum TranspositionTable::MoveBound;
-
-			if (entry->bound == Lower)
-			{
-				alpha = std::max(alpha, entry->score);
-			}
-
-			if (entry->bound == Exact)
-			{
-				searchResult.bestMove = entry->bestMove;
-				searchResult.evaluation = entry->score * ((pos.colorToMove() == White) ? 1 : -1);
-				searchResult.depth++;
-				continue;
-			}
+			searchResult.bestMove = entry->bestMove;
+			searchResult.evaluation = entry->score * ((pos.colorToMove() == White) ? 1 : -1);
+			searchResult.depth++;
+			continue;
 		}
 
-		TranspositionTable::TTEntry newEntry =
+		// set initial delta for aspiration window to +/- 50 centipawns
+		int delta = Evaluation::PieceValue[Pawn] / 2;
+		int alpha, beta;
+
+		if (currentMaxDepth > 4)
 		{
-			.key		= pos.zobristKey(),
-			.bestMove	= Move::Null(),
-			.score		= alpha,
-			.bound		= TranspositionTable::MoveBound::Upper,
-			.depth		= currentMaxDepth
-		};
-
-		MovePicker picker(pos, moves, killerMoves[0], TTMove);
-
-		while (picker.hasNext())
+			// set aspiration window bounds around previous iteration's evaluation
+			alpha = prevIterationEval - delta;
+			beta = prevIterationEval + delta;
+		}
+		else
 		{
-			searchInfo.nodes++;
-
-			Move move = picker.pick();
-			int eval;
-
-			pos.doMove(move);
-			eval = -negamax(pos, -Evaluation::Infinity, -alpha, 0, currentMaxDepth, searchInfo);
-			pos.undoMove();
-
-			if (searchInfo.stopped) break;
-
-			if (eval > alpha)
-			{
-				alpha = eval;
-				bestIterMove = move;
-
-				newEntry.bound = TranspositionTable::MoveBound::Exact;
-				newEntry.bestMove = move;
-				newEntry.score = eval;	
-			}
+			alpha = -Evaluation::Infinity;
+			beta = Evaluation::Infinity;
 		}
 
-		if (searchInfo.stopped) break;
+		// Aspiration retry loop
+		while (true)
+		{
+			// search alpha is the best score found so far, 
+			// starting with the lower bound of the aspiration window
+			int searchAlpha = alpha;
+			bestIterMove = moves[0];
 
-		TT.store(std::move(newEntry));
+			MovePicker picker(pos, moves, killerMoves[0], TTMove);
+
+			while (picker.hasNext())
+			{
+				searchInfo.nodes++;
+				Move move = picker.pick();
+
+				pos.doMove(move);
+				int eval = -negamax(pos, -beta, -searchAlpha, 0, currentMaxDepth, searchInfo);
+				pos.undoMove();
+
+				if (searchInfo.stopped) goto searchStopped;
+
+				// update best score found so far
+				if (eval > searchAlpha)
+				{
+					searchAlpha = eval;
+					bestIterMove = move;
+				}
+
+				// search failed high already -> no need to continue searching
+				if (searchAlpha >= beta) break;
+			}
+
+			// store results in transposition table
+			TranspositionTable::TTEntry newEntry =
+			{
+				.key = pos.zobristKey(),
+				.bestMove = bestIterMove,
+				.score = searchAlpha,
+				.bound = Bound::Exact,
+				.depth = currentMaxDepth
+			};
+
+			// Fail low — widen lower bound and retry (gradual widening)
+			if (searchAlpha <= alpha)
+			{
+				newEntry.bound = Bound::Upper;
+				TT.store(std::move(newEntry));
+				alpha = std::max(alpha - delta, -Evaluation::Infinity);
+				delta *= 2;
+			}
+
+			// Fail high — widen upper bound and retry (gradual widening)
+			else if (searchAlpha >= beta)
+			{
+				newEntry.bound = Bound::Lower;
+				TT.store(std::move(newEntry));
+				beta = std::min(beta + delta, Evaluation::Infinity);
+				delta *= 2;
+			}
+
+			// Score inside window
+			else
+			{
+				newEntry.bound = Bound::Exact;
+				TT.store(std::move(newEntry));
+				prevIterationEval = searchAlpha;
+				break;
+			}
+		}
 
 		searchResult.bestMove = bestIterMove;
-		searchResult.evaluation = alpha * ((pos.colorToMove() == White) ? 1 : -1);
+		searchResult.evaluation = prevIterationEval * Evaluation::colorMultiplier(pos.colorToMove());
 		searchResult.depth++;
 
+		bool checkMateFound = std::abs(searchResult.evaluation) >= Evaluation::CheckMate - MaxSearchDepth;
+		int mateIn = (checkMateFound) ? std::abs(searchResult.evaluation - Evaluation::CheckMate) : 0;
+
 		std::cout << "info depth " << currentMaxDepth
-			<< " score cp " << alpha
+			<< " score cp " << (checkMateFound ? (searchResult.evaluation > 0) ? ("mate " + std::to_string(mateIn)) : ("mate -" + std::to_string(mateIn)) : (std::to_string(searchResult.evaluation)))
 			<< " nodes " << searchInfo.nodes
 			<< " time " << (std::chrono::duration<float>(Clock::now() - searchInfo.start).count()) << "s"
-			<< " NPS " << searchInfo.nodes / (std::chrono::duration<float>(Clock::now() - searchInfo.start).count())/1000000.0f << "M"
+			<< " NPS " << searchInfo.nodes / (std::chrono::duration<float>(Clock::now() - searchInfo.start).count()) / 1000000.0f << "M"
 			<< "\n";
 	}
 
+searchStopped:
 	searchResult.nodes = searchInfo.nodes;
-
 	return searchResult;
 }
 
