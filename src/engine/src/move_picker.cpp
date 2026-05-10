@@ -5,7 +5,7 @@ namespace Bratwurst::Search
 	constexpr int HeuristicCaptureBonus = 200;
 	constexpr int HeuristicPromotionBonus = 1000;
 
-	int score_move(const Position& pos, Move move, Move* killers)
+	int score_move(const Position& pos, Move move, Move* killers, const int history[][64][64])
 	{
 		int eval = 0;
 
@@ -20,10 +20,18 @@ namespace Bratwurst::Search
 			eval += HeuristicCaptureBonus;
 		}
 
-		else if (killers != nullptr)
+		else
 		{
-			if (move == killers[0]) eval += 70;
-			if (move == killers[1])	eval += 65;
+			if (killers != nullptr)
+			{
+				if (move == killers[0]) eval += 70;
+				if (move == killers[1])	eval += 65;
+			}
+
+			if (history != nullptr)
+			{
+				eval += history[c][move.src()][move.dst()] >> 7;
+			}
 		}
 
 		// if you move to a square that is attacked by a pawn, you likely loose your piece

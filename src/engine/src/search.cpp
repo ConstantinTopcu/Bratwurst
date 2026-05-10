@@ -28,6 +28,7 @@ constexpr int MaxSearchDepth = 100;
 
 TranspositionTable TT(256); // 256 MB
 Move killerMoves[MaxSearchDepth][2];
+int historyTable[ColorNum][SquareNum][SquareNum];
 
 // Helper functions to store scores in TT and probe it from TT
 inline int scoreToTT(int score, int ply) 
@@ -85,7 +86,7 @@ int quiescence(Position& pos, int alpha, int beta, int ply, int depth, SearchInf
 		return standPat;
 	}
 
-	MovePicker picker(pos, moves, killerMoves[ply]);
+	MovePicker picker(pos, moves, killerMoves[ply], historyTable);
 
 	while (picker.hasNext())
 	{
@@ -175,7 +176,7 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 		if (nullEval >= beta) return beta;
 	}
 	
-	MovePicker picker(pos, moves, killerMoves[ply], ttMove);
+	MovePicker picker(pos, moves, killerMoves[ply], historyTable, ttMove);
 	int staticEval = Evaluation::evaluate(pos);
 	int eval = -Evaluation::Infinity;
 
@@ -233,7 +234,6 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 		{
 			// check extensions
 			int extension = pos.checkers() ? 1 : 0;
-
 			eval = -negamax(pos, -beta, -alpha, ply + 1, maxDepth + extension, searchInfo);
 		}
 
@@ -254,10 +254,19 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 			newEntry.score = scoreToTT(alpha, ply);
 			newEntry.bestMove = move;
 
-			if (!isCapture && killerMoves[ply][0] != move)
+			if (!isCapture)
 			{
-				killerMoves[ply][1] = killerMoves[ply][0];
-				killerMoves[ply][0] = move;
+				if (killerMoves[ply][0] != move)
+				{
+					// update killer moves
+					killerMoves[ply][1] = killerMoves[ply][0];
+					killerMoves[ply][0] = move;
+				}
+
+				// update history — cap to prevent overflow
+				Color c = pos.colorToMove();
+				historyTable[c][move.src()][move.dst()] += remainingDepth * remainingDepth;
+				historyTable[c][move.src()][move.dst()] = std::min(historyTable[c][move.src()][move.dst()], 16384);
 			}
 
 			break; // beta cutoff
@@ -299,6 +308,12 @@ SearchResult search(Position& pos, int timeMs)
 
 	killerMoves[MaxSearchDepth - 1][0] = Move::Null();
 	killerMoves[MaxSearchDepth - 1][1] = Move::Null();
+
+	// age history instead of clearing — preserves useful info
+	for (auto& side : historyTable)
+		for (auto& from : side)
+			for (auto& val : from)
+				val /= 2;
 
 	MoveList moves = generateMoves<GenType::All>(pos);
 
@@ -351,7 +366,7 @@ SearchResult search(Position& pos, int timeMs)
 			int searchAlpha = alpha;
 			bestIterMove = moves[0];
 
-			MovePicker picker(pos, moves, killerMoves[0], TTMove);
+			MovePicker picker(pos, moves, killerMoves[0], historyTable, TTMove);
 
 			while (picker.hasNext())
 			{
