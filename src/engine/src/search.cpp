@@ -16,7 +16,6 @@ using Clock = std::chrono::high_resolution_clock;
 
 struct SearchInfo
 {
-	float aspirationWindowFailPercantage;
 	Clock::time_point start;
 	bool stopped = false;
 	int timeMS = 0;
@@ -43,6 +42,42 @@ inline int scoreFromTT(int score, int ply)
 	if (score >= Evaluation::CheckMate - MaxSearchDepth) return score - ply;  // convert back to root-relative
 	if (score <= -Evaluation::CheckMate + MaxSearchDepth) return score + ply;
 	return score;
+}
+
+inline void ageHistory()
+{
+	for (auto& side : historyTable)
+		for (auto& from : side)
+			for (auto& val : from)
+				val /= 2;
+}
+
+inline void ageKillerMoves()
+{
+	for (int p = 1; p < MaxSearchDepth; p++)
+	{
+		killerMoves[p - 1][0] = killerMoves[p][0];
+		killerMoves[p - 1][1] = killerMoves[p][1];
+	}
+
+	killerMoves[MaxSearchDepth - 1][0] = Move::Null();
+	killerMoves[MaxSearchDepth - 1][1] = Move::Null();
+}
+
+
+inline void updateKillers(int ply, Move move)
+{
+	if (killerMoves[ply][0] != move)
+	{
+		killerMoves[ply][1] = killerMoves[ply][0];
+		killerMoves[ply][0] = move;
+	}
+}
+
+inline void updateHistory(Color c, Move move, int remainingDepth)
+{
+	historyTable[c][move.src()][move.dst()] += remainingDepth * remainingDepth;
+	historyTable[c][move.src()][move.dst()] = std::min(historyTable[c][move.src()][move.dst()], 16384);
 }
 
 inline bool updateTime(SearchInfo& info)
@@ -72,12 +107,11 @@ int quiescence(Position& pos, int alpha, int beta, int ply, int depth, SearchInf
 	if (pos.isThreefoldRepetition(2)) return 0;
 
 	int standPat = Evaluation::evaluate(pos);
+
 	if (standPat >= beta || ply == depth)
 	{
 		return standPat;
 	}
-
-	alpha = std::max(alpha, standPat);
 
 	MoveList moves = generateMoves<GenType::Quiescence>(pos);
 
@@ -88,18 +122,32 @@ int quiescence(Position& pos, int alpha, int beta, int ply, int depth, SearchInf
 
 	MovePicker picker(pos, moves, killerMoves[ply], historyTable);
 
+	alpha = std::max(alpha, standPat);
+
 	while (picker.hasNext())
 	{
 		Move move = picker.pick();
+
+		// delta pruning 
+		Piece capturedPiece = pos.pieceOn(move.dst());
+		PieceType capturedType = (capturedPiece != NonePiece) ? pieceTypeOf(capturedPiece) : NonePieceType;
+		int captureValue = 0; // maximum material gain from this move
+		
+		if (capturedPiece != NonePiece) captureValue += Evaluation::PieceValue[capturedType];
+		if (move.promotion()) captureValue += Evaluation::PieceValue[move.promotionType()] - Evaluation::PieceValue[Pawn];
+		if (move.enPassant()) captureValue = Evaluation::PieceValue[Pawn];
+
+		// if even after the capture you are still 
+		// significantly below alpha, then this move 
+		// is unlikely to raise alpha and can be pruned
+		if (standPat + captureValue + 200 < alpha)
+			continue; // skip move
 
 		pos.doMove(move);
 		int eval = -quiescence(pos, -beta, -alpha, ply + 1, depth, searchInfo);
 		pos.undoMove();
 
-		if (eval > alpha)
-		{
-			alpha = eval;
-		}
+		alpha = std::max(alpha, eval);
 
 		if (alpha >= beta)
 		{
@@ -115,6 +163,7 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 	searchInfo.nodes++;
 
 	int remainingDepth = maxDepth - ply;
+	Color c = pos.colorToMove();
 
 	// check for search cancellation
 	updateTime(searchInfo);
@@ -201,7 +250,8 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 			static constexpr int futilityMargin[4] = { 0, 100, 200, 400 }; // in centipawns
 			int margin = futilityMargin[remainingDepth];
 
-			// if the static evaluation plus a margin is still below alpha, then this move is unlikely to raise alpha and can be pruned
+			// if the static evaluation plus a margin is still below alpha, 
+			// then this move is unlikely to raise alpha and can be pruned
 			if (staticEval + margin < alpha)
 			{
 				pos.undoMove();
@@ -233,11 +283,13 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 		else
 		{
 			// check extensions
-			int extension = pos.checkers() ? 1 : 0;
+			int extension = isCheck ? 1 : 0;
 			eval = -negamax(pos, -beta, -alpha, ply + 1, maxDepth + extension, searchInfo);
 		}
 
 		pos.undoMove();
+
+		if (searchInfo.stopped) return -Evaluation::Infinity;
 
 		if (eval > alpha)
 		{
@@ -256,27 +308,15 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 
 			if (!isCapture)
 			{
-				if (killerMoves[ply][0] != move)
-				{
-					// update killer moves
-					killerMoves[ply][1] = killerMoves[ply][0];
-					killerMoves[ply][0] = move;
-				}
-
-				// update history — cap to prevent overflow
-				Color c = pos.colorToMove();
-				historyTable[c][move.src()][move.dst()] += remainingDepth * remainingDepth;
-				historyTable[c][move.src()][move.dst()] = std::min(historyTable[c][move.src()][move.dst()], 16384);
+				updateKillers(ply, move);
+				updateHistory(c, move, remainingDepth);
 			}
 
 			break; // beta cutoff
 		}
 	}
 
-	if (!searchInfo.stopped)
-	{
-		TT.store(std::move(newEntry));
-	}
+	TT.store(std::move(newEntry));
 
 	return alpha;
 }
@@ -299,45 +339,35 @@ SearchResult search(Position& pos, int timeMs)
 		.depth = 0
 	};
 
-	// shift killer moves down the stack and clear the top level
-	for (int ply = 0; ply < MaxSearchDepth - 1; ply++)
-	{
-		killerMoves[ply][0] = killerMoves[ply + 1][0];
-		killerMoves[ply][1] = killerMoves[ply + 1][1];
-	}
-
-	killerMoves[MaxSearchDepth - 1][0] = Move::Null();
-	killerMoves[MaxSearchDepth - 1][1] = Move::Null();
-
-	// age history instead of clearing — preserves useful info
-	for (auto& side : historyTable)
-		for (auto& from : side)
-			for (auto& val : from)
-				val /= 2;
+	ageKillerMoves();
+	ageHistory();
 
 	MoveList moves = generateMoves<GenType::All>(pos);
 
 	// check for stalemate/checkmate
 	if (moves.empty())
 	{
-		searchResult.evaluation = pos.checkers() ? -Evaluation::CheckMate : Evaluation::StaleMate;
+		bool isCheckMate = pos.checkers();
+		searchResult.evaluation = isCheckMate ? -Evaluation::CheckMate : Evaluation::StaleMate;
 		return searchResult;
 	}
 
+	Color friendly = pos.colorToMove();
+	Zobrist::Key zobristKey = pos.zobristKey();
 	int prevIterationEval = 0;
 
 	for (int currentMaxDepth = 1; currentMaxDepth <= 100; currentMaxDepth++)
 	{
 		// check for fitting transposition table entry with sufficient depth
 		using Bound = TranspositionTable::MoveBound;
-		const TranspositionTable::TTEntry* entry = TT.probe(pos.zobristKey());
+		const TranspositionTable::TTEntry* entry = TT.probe(zobristKey);
 		Move TTMove = (entry) ? entry->bestMove : Move::Null();
 		Move bestIterMove = moves[0];
 
 		if (entry != nullptr && entry->depth >= currentMaxDepth && entry->bound == Bound::Exact)
 		{
 			searchResult.bestMove = entry->bestMove;
-			searchResult.evaluation = entry->score * ((pos.colorToMove() == White) ? 1 : -1);
+			searchResult.evaluation = entry->score * Evaluation::colorMultiplier(friendly);
 			searchResult.depth++;
 			continue;
 		}
@@ -378,7 +408,6 @@ SearchResult search(Position& pos, int timeMs)
 
 				if (searchInfo.stopped) goto searchStopped;
 
-				// update best score found so far
 				if (eval > searchAlpha)
 				{
 					searchAlpha = eval;
@@ -392,7 +421,7 @@ SearchResult search(Position& pos, int timeMs)
 			// store results in transposition table
 			TranspositionTable::TTEntry newEntry =
 			{
-				.key = pos.zobristKey(),
+				.key = zobristKey,
 				.bestMove = bestIterMove,
 				.score = searchAlpha,
 				.bound = Bound::Exact,
@@ -428,14 +457,15 @@ SearchResult search(Position& pos, int timeMs)
 		}
 
 		searchResult.bestMove = bestIterMove;
-		searchResult.evaluation = prevIterationEval * Evaluation::colorMultiplier(pos.colorToMove());
+		searchResult.evaluation = prevIterationEval * Evaluation::colorMultiplier(friendly);
 		searchResult.depth++;
 
 		bool checkMateFound = std::abs(searchResult.evaluation) >= Evaluation::CheckMate - MaxSearchDepth;
-		int mateIn = (checkMateFound) ? std::abs(searchResult.evaluation - Evaluation::CheckMate) : 0;
+		int mateIn = checkMateFound ? std::abs(searchResult.evaluation - Evaluation::CheckMate) : 0;
+		std::string mateInfo = checkMateFound ? ((searchResult.evaluation > 0) ? ("mate " + std::to_string(mateIn)) : ("mate -" + std::to_string(mateIn))) : std::to_string(searchResult.evaluation);
 
 		std::cout << "info depth " << currentMaxDepth
-			<< " score cp " << (checkMateFound ? (searchResult.evaluation > 0) ? ("mate " + std::to_string(mateIn)) : ("mate -" + std::to_string(mateIn)) : (std::to_string(searchResult.evaluation)))
+			<< " score cp " << mateInfo
 			<< " nodes " << searchInfo.nodes
 			<< " time " << (std::chrono::duration<float>(Clock::now() - searchInfo.start).count()) << "s"
 			<< " NPS " << searchInfo.nodes / (std::chrono::duration<float>(Clock::now() - searchInfo.start).count()) / 1000000.0f << "M"
