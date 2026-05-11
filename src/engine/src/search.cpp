@@ -208,7 +208,11 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 	bool isCheck = pos.checkers();
 	bool nullMoveAllowed = pos.stateInfo().prevMove != Move::Null();
 
-	// Null Move Pruning
+	// Null Move Pruning:
+	// if you skip your turn and you still fail high, 
+	// then this position is too good for you 
+	// and the opponent won't let you reach it, 
+	// so you can safely prune it
 	if (nullMoveAllowed && pos.phase() >= 2 && !isCheck && remainingDepth > 3)
 	{
 		int reduction = 3 + remainingDepth / 6;
@@ -218,15 +222,30 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 		int nullEval = -negamax(pos, -beta, -beta + 1, ply + 1, NMPDepth, searchInfo);
 		pos.undoNullMove();
 
-		// if you skip your turn and you still fail high, 
-		// then this position is too good for you 
-		// and the opponent won't let you reach it, 
-		// so you can safely prune it
-		if (nullEval >= beta) return beta;
+		if (nullEval >= beta) return beta; // prune
 	}
-	
-	MovePicker picker(pos, moves, killerMoves[ply], historyTable, ttMove);
+
 	int staticEval = Evaluation::evaluate(pos);
+	
+	// Reverse Futility Pruning:
+	// if the static evaluation minus a margin, 
+	// is still above beta, its very likely 
+	// that this position will raise alpha 
+	// and cause a beta cutoff, so we can safely prune it
+	if (!isCheck && remainingDepth <= 6)
+	{
+		// scale the margin linearly based on remaining depth, 
+		// to account for the increasing uncertainty 
+		// of the static evaluation as we go deeper
+		int margin = remainingDepth * 100;
+
+		if (staticEval - margin >= beta)
+		{
+			return staticEval; // prune
+		}
+	}
+
+	MovePicker picker(pos, moves, killerMoves[ply], historyTable, ttMove);
 	int eval = -Evaluation::Infinity;
 
 	while (picker.hasNext())
