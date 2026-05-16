@@ -25,6 +25,7 @@ struct StateInfo
 	Bitboard pinned;
 	Bitboard checkers;
 	Zobrist::Key zobristKey;
+	Zobrist::Key pawnKey;
 	uint16 material[ColorNum];
 };
 

@@ -87,6 +87,8 @@ public:
 	[[nodiscard]] inline bool isFiftyMoveRule() const { return halfmoveClock() >= 100; }
 
 	[[nodiscard]] inline Zobrist::Key zobristKey() const { return stateInfo().zobristKey; }
+	[[nodiscard]] inline Zobrist::Key pawnKey() const { return stateInfo().pawnKey; }
+
 	[[nodiscard]] inline int material() const { return m_material; }
 	[[nodiscard]] inline int egPSQT() const { return m_egPSQT; }
 	[[nodiscard]] inline int mgPSQT() const { return m_mgPSQT; }

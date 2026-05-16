@@ -74,10 +74,11 @@ inline void updateKillers(int ply, Move move)
 	}
 }
 
-inline void updateHistory(Color c, Move move, int remainingDepth)
+inline void updateHistory(Color c, Move move, int bonus)
 {
-	historyTable[c][move.src()][move.dst()] += remainingDepth * remainingDepth;
-	historyTable[c][move.src()][move.dst()] = std::min(historyTable[c][move.src()][move.dst()], 16384);
+	historyTable[c][move.src()][move.dst()] += bonus;    
+	historyTable[c][move.src()][move.dst()] =
+		std::clamp(historyTable[c][move.src()][move.dst()], -16384, 16384);
 }
 
 inline bool updateTime(SearchInfo& info)
@@ -260,7 +261,9 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 
 		bool givesCheck = pos.checkers();
 
-		// Futility Pruning
+		// Futility Pruning:
+		// if the static evaluation plus a margin is still below alpha, 
+		// then this move is unlikely to raise alpha and can be pruned
 		if (remainingDepth <= 3 
 			&& !isCapture  && !move.promotion() 
 			&& !isCheck  && !givesCheck
@@ -269,8 +272,6 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 			static constexpr int futilityMargin[4] = { 0, 100, 200, 400 }; // in centipawns
 			int margin = futilityMargin[remainingDepth];
 
-			// if the static evaluation plus a margin is still below alpha, 
-			// then this move is unlikely to raise alpha and can be pruned
 			if (staticEval + margin < alpha)
 			{
 				pos.undoMove();
@@ -328,7 +329,7 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 			if (!isCapture)
 			{
 				updateKillers(ply, move);
-				updateHistory(c, move, remainingDepth);
+				updateHistory(c, move, remainingDepth * remainingDepth);
 			}
 
 			break; // beta cutoff

@@ -6,6 +6,26 @@
 namespace Bratwurst::Evaluation
 {
 
+
+struct PawnScore
+{
+	int mg = 0;
+	int eg = 0;
+	PawnScore operator+(const PawnScore& s) const { return { mg + s.mg, eg + s.eg }; }
+	PawnScore operator-(const PawnScore& s) const { return { mg - s.mg, eg - s.eg }; }
+	PawnScore& operator+=(const PawnScore& s) { mg += s.mg; eg += s.eg; return *this; }
+};
+
+
+struct PawnEntry
+{
+	Zobrist::Key key;
+	PawnScore score;
+};
+
+static constexpr int PAWN_TABLE_SIZE = 1 << 16; // 65536 entries
+inline PawnEntry pawnTable[PAWN_TABLE_SIZE];
+
 inline int colorMultiplier(Color c)
 {
 	return (c == White) ? 1 : -1;
@@ -89,9 +109,9 @@ inline int evalMobility(const Position& pos)
 	return eval;
 }
 
-inline int evalDoubledPawns(const Position& pos, Color c)
+inline PawnScore evalDoubledPawns(const Position& pos, Color c)
 {
-	int eval = 0;
+	PawnScore score = { 0, 0 };
 
 	Bitboard pawns = pos.pieceBB(c, Pawn);
 
@@ -100,15 +120,16 @@ inline int evalDoubledPawns(const Position& pos, Color c)
 		Bitboard mask = fileMask(f);
 		Bitboard pawnsOnFile = pawns & mask;
 		int doubledCnt = std::max(0, popCnt(pawnsOnFile) - 1); // only penalize if there are 2 or more pawns on the file
-		eval -= doubledCnt * 20;
+		score.mg += doubledCnt * -15;
+		score.eg += doubledCnt * -60;
 	}
 
-	return eval;
+	return score;
 }
 
-inline int evalIsolatedPawns(const Position& pos, Color c)
+inline PawnScore evalIsolatedPawns(const Position& pos, Color c)
 {
-	int eval = 0;
+	PawnScore score = { 0, 0 };
 	Bitboard pawns = pos.pieceBB(c, Pawn);
 	bool hasLeftNeighbor = false;
 
@@ -124,25 +145,90 @@ inline int evalIsolatedPawns(const Position& pos, Color c)
 		}
 
 		bool hasRightNeighbor = (f < FileH) && (pawns & fileMask(File(f + 1)));
-		eval -= 20 * (!hasLeftNeighbor * !hasRightNeighbor) * popCnt(pawnsOnFile);
+		score.mg += -22 * (!hasLeftNeighbor && !hasRightNeighbor) * popCnt(pawnsOnFile);
+		score.eg += -30 * (!hasLeftNeighbor && !hasRightNeighbor) * popCnt(pawnsOnFile);
 		hasLeftNeighbor = true;
 	}
 
-	return eval;
+	return score;
 }
 
 
-inline int evalPassedPawns(const Position& pos, Color c)
+inline PawnScore evalPassedPawns(const Position& pos, Color c)
 {
+	constexpr int PassedMG[8] = { 0,  0,  7, 22, 37, 60,  90, 0 };
+	constexpr int PassedEG[8] = { 0,  0, 22, 45, 82, 127, 195, 0 };
+
 	Bitboard pawns = pos.pieceBB(c, Pawn);
 	Bitboard enemyPawns = pos.pieceBB(~c, Pawn);
-	int eval = 0;
+	PawnScore score = { 0, 0 };
 
 	while (pawns)
 	{
 		Square sq = popLsb(pawns);
-		bool passedPawn = (passedPawnMasks[c][sq] & enemyPawns) == 0ULL;
-		eval += 40 * passedPawn;
+		if ((passedPawnMasks[c][sq] & enemyPawns) == 0ULL)
+		{
+			Rank r = (c == White) ? rankOf(sq) : (Rank)(Rank7 - rankOf(sq));
+			score.mg += PassedMG[r];
+			score.eg += PassedEG[r];
+		}
+	}
+	return score;
+}
+
+inline int evalPawnStructure(const Position& pos)
+{
+	Zobrist::Key pawnKey = pos.pawnKey();
+	PawnEntry& entry = pawnTable[pawnKey & (PAWN_TABLE_SIZE-1)];
+
+	int mgPhase = pos.phase();
+	int egPhase = MAX_PHASE - pos.phase();
+
+	if (entry.key == pawnKey)
+	{
+		return (entry.score.mg * mgPhase + entry.score.eg * egPhase) / MAX_PHASE;
+	}
+
+	//Pawn structure
+	PawnScore doubledPawnEval = evalDoubledPawns(pos, White) - evalDoubledPawns(pos, Black); // no scaling needed
+	PawnScore isolatedPawnEval = evalIsolatedPawns(pos, White) - evalIsolatedPawns(pos, Black); // 60% midgame and 100% endgame
+	PawnScore passedPawnEval = evalPassedPawns(pos, White) - evalPassedPawns(pos, Black); // 40% midgame and 100% endgame
+
+	PawnScore totalPawnEval = doubledPawnEval + isolatedPawnEval + passedPawnEval;
+
+	entry = { pawnKey, totalPawnEval};
+
+	return (totalPawnEval.mg * mgPhase + totalPawnEval.eg * egPhase) / MAX_PHASE;
+}
+
+inline int bishopPairBonus(const Position& pos, Color c)
+{
+	Bitboard bishops = pos.pieceBB(c, Bishop);
+	return (popCnt(bishops) >= 2) ? 30 : 0;
+}
+
+// evaluates for both colors and return difference
+inline int evalOpenRookFiles(const Position& pos, Color c)
+{
+	Bitboard rooks = pos.pieceBB(c, Rook);
+	Bitboard friendlyPawns = pos.pieceBB(c, Pawn);
+	Bitboard enemyPawns = pos.pieceBB(~c, Pawn);
+	int eval = 0;
+
+	while (rooks)
+	{
+		Square sq = popLsb(rooks);
+		File f = fileOf(sq);
+		Bitboard fileBB = fileMask(f);
+
+		bool noFriendlyPawns = (fileBB & friendlyPawns) == 0ULL;
+		bool noEnemyPawns = (fileBB & enemyPawns) == 0ULL;
+
+		bool openFile = noFriendlyPawns && noEnemyPawns;
+		bool semiOpenFile = noFriendlyPawns && !noEnemyPawns;
+
+		if (openFile) eval += 30; // fully open file
+		else if (semiOpenFile) eval += 15; // semi-open file (only our pawns gone)
 	}
 
 	return eval;
@@ -158,7 +244,7 @@ inline int evaluate(const Position& pos)
 
 	// PSQT bonus
 	const int psqtEval = (pos.mgPSQT() * phase + pos.egPSQT() * egPhase) / MAX_PHASE;
-	
+
 	// mobility bonus
 	const int mobilityEval =
 		evalMobility<Knight>(pos) +
@@ -166,20 +252,15 @@ inline int evaluate(const Position& pos)
 		evalMobility<Rook>(pos) +
 		evalMobility<Queen>(pos);
 
-	// king safety bonus
+	// king safety (midgame only)
 	int attackingKingZoneEval = evalAttackingKingZone(pos, White) - evalAttackingKingZone(pos, Black);
 	int pawnShieldEval = evalPawnShield(pos, White) - evalPawnShield(pos, Black);
 	int kingSafetyEval = ((attackingKingZoneEval + pawnShieldEval) * phase) / MAX_PHASE;
 
-	// pawn structure bonus
-	//int doubledPawnEval = evalDoubledPawns(pos, White) - evalDoubledPawns(pos, Black);
-	//int isolatedPawnEval = evalIsolatedPawns(pos, White) - evalIsolatedPawns(pos, Black);
-	//int passedPawnEval = evalPassedPawns(pos, White) - evalPassedPawns(pos, Black);
-	//int pawnStructureEval = isolatedPawnEval;
-	
-	//pawnStructureEval = (pawnStructureEval / 2) + pawnStructureEval * egPhase / (2 * MAX_PHASE); // scale pawn structure eval so it has more impact in endgame
+	int bishopPairEval = bishopPairBonus(pos, White) - bishopPairBonus(pos, Black);
+	int rookFileEval = evalOpenRookFiles(pos, White) - evalOpenRookFiles(pos, Black);
 
-	int eval = psqtEval + materialEval + mobilityEval + kingSafetyEval; 
+	int eval = psqtEval + materialEval + mobilityEval + kingSafetyEval + rookFileEval + bishopPairEval;
 
 	return (c == White) ? eval : -eval;
 }

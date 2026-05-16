@@ -295,6 +295,12 @@ void Position::doMove(Move move)
         newStateInfo.zobristKey ^= Zobrist::piece[capturedPiece][dst];
         newStateInfo.halfMoveClock = 0;
 
+        // update pawnKey
+#ifndef DISABLE_PAWN_HASH
+		if (pieceTypeOf(capturedPiece) == Pawn)
+            newStateInfo.pawnKey ^= Zobrist::piece[capturedPiece][dst];
+#endif
+
     }
     if (move.promotion())
     {
@@ -304,6 +310,7 @@ void Position::doMove(Move move)
         Piece promotionPiece = makePiece(friendly, move.promotionType());
         newStateInfo.zobristKey ^= Zobrist::piece[srcPiece][src];
         newStateInfo.zobristKey ^= Zobrist::piece[promotionPiece][dst];
+		newStateInfo.pawnKey ^= Zobrist::piece[srcPiece][src];
         
         removePiece(src, srcPiece);
         placePiece(dst, promotionPiece);
@@ -319,6 +326,10 @@ void Position::doMove(Move move)
 
         removePiece(enemyPawnSquare, enemyPawn);
         newStateInfo.zobristKey ^= Zobrist::piece[enemyPawn][enemyPawnSquare];
+
+#ifndef DISABLE_PAWN_HASH
+		newStateInfo.pawnKey ^= Zobrist::piece[enemyPawn][enemyPawnSquare];
+#endif
     }
     else if (move.castling())
     {
@@ -342,6 +353,10 @@ void Position::doMove(Move move)
         movePiece(src, dst, srcPiece);
         newStateInfo.zobristKey ^= Zobrist::piece[srcPiece][src];
         newStateInfo.zobristKey ^= Zobrist::piece[srcPiece][dst];
+
+#ifndef DISABLE_PAWN_HASH
+		if (srcType == Pawn) newStateInfo.pawnKey ^= Zobrist::piece[srcPiece][src] | Zobrist::piece[srcPiece][dst];
+#endif
     }
 
     // Update castling rights

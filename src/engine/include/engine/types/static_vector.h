@@ -20,6 +20,7 @@ namespace Bratwurst
         
         constexpr void remove(size_t i);
         constexpr void pop();
+		constexpr void clear() { m_size = 0; }
 
         constexpr T& back();
         constexpr const T& back() const;
