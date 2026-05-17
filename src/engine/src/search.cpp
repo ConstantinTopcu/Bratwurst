@@ -136,19 +136,37 @@ int quiescence(Position& pos, int alpha, int beta, int ply, int depth, SearchInf
 
 	// make sure search hasnt been cancelled yet
 	updateTime(searchInfo);
-
-	if (searchInfo.stopped)
-	{
-		return -Evaluation::Infinity;
-	}
+	if (searchInfo.stopped)	return -Evaluation::Infinity;
 
 	// check for draw
 	if (pos.isThreefoldRepetition(2)) return 0;
+
+	Zobrist::Key key = pos.zobristKey();
+
+	const TranspositionTable::TTEntry* ttEntry = TT.probe(key);
+
+	if (ttEntry != nullptr)
+	{
+		int ttScore = scoreFromTT(ttEntry->score, ply);
+		if (ttEntry->bound == Lower) alpha = std::max(alpha, ttScore);
+		if (ttEntry->bound == Upper) beta = std::min(beta, ttScore);
+		if (ttEntry->bound == Exact) return ttScore;
+		if (alpha >= beta) return alpha;
+	}
 
 	int standPat = Evaluation::evaluate(pos);
 
 	if (standPat >= beta || ply == depth)
 	{
+		TT.store
+		({
+			.key = key,
+			.bestMove = Move::Null(),
+			.score = scoreToTT(standPat, ply),
+			.bound = Lower,
+			.depth = 0
+		});
+
 		return standPat;
 	}
 
@@ -159,7 +177,17 @@ int quiescence(Position& pos, int alpha, int beta, int ply, int depth, SearchInf
 		return standPat;
 	}
 
-	MovePicker picker(pos, moves, killerMoves[ply], historyTable);
+	TranspositionTable::TTEntry newEntry =
+	{
+		.key = key,
+		.bestMove = Move::Null(),
+		.score = alpha,
+		.bound = Upper,
+		.depth = 0
+	};
+
+	Move ttMove = (ttEntry != nullptr) ? ttEntry->bestMove : Move::Null();
+	MovePicker picker(pos, moves, killerMoves[ply], historyTable, ttMove);
 
 	alpha = std::max(alpha, standPat);
 
@@ -184,14 +212,27 @@ int quiescence(Position& pos, int alpha, int beta, int ply, int depth, SearchInf
 		pos.doMove(move);
 		int eval = -quiescence(pos, -beta, -alpha, ply + 1, depth, searchInfo);
 		pos.undoMove();
+		
+		if (eval > alpha)
+		{
+			alpha = eval;
 
-		alpha = std::max(alpha, eval);
+			newEntry.bound = Exact;
+			newEntry.bestMove = move;
+			newEntry.score = scoreToTT(eval, ply);
+		}
 
 		if (alpha >= beta)
 		{
+			newEntry.bestMove = move;
+			newEntry.score = scoreToTT(alpha, ply);
+			newEntry.bound = Lower;
+
 			break;
 		}
 	}
+
+	TT.store(std::move(newEntry));
 
 	return alpha;
 }
@@ -373,6 +414,8 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 			}
 
 			newEntry.bound = Lower;
+			newEntry.score = scoreToTT(alpha, ply);
+			newEntry.bestMove = move;
 
 			break; // beta cutoff
 		}
