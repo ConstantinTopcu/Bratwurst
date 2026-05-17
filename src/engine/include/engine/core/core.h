@@ -64,7 +64,7 @@
 #define ASSERT_MSG(expr, msg) ((void)0)
 #endif
 
-#define DISABLE_PAWN_HASH 1 // Disable pawn hash for now, as it is not yet implemented and causes some issues with the evaluation cache
+#define DISABLE_PAWN_HASH 1
 
 namespace Bratwurst
 {

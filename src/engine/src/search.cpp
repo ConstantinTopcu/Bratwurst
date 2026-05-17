@@ -13,6 +13,7 @@ namespace Bratwurst::Search
 // constants for search
 
 using Clock = std::chrono::high_resolution_clock;
+using enum TranspositionTable::MoveBound;
 
 struct SearchInfo
 {
@@ -28,6 +29,44 @@ constexpr int MaxSearchDepth = 100;
 TranspositionTable TT(256); // 256 MB
 Move killerMoves[MaxSearchDepth][2];
 int historyTable[ColorNum][SquareNum][SquareNum];
+
+// keeps track of PV
+Move PvTable[MaxSearchDepth][MaxSearchDepth];
+int  PvLength[MaxSearchDepth] = {};
+
+// previous iteration PV
+Move prevPV[MaxSearchDepth];
+int  prevPVLength = 0;
+
+inline void updatePV(int ply, Move move)
+{
+	PvTable[ply][ply] = move;
+
+	for (int i = ply + 1; i < PvLength[ply + 1]; i++)
+		PvTable[ply][i] = PvTable[ply + 1][i];
+	
+	PvLength[ply] = PvLength[ply + 1];
+}
+
+inline void clearPV(int ply)
+{
+	PvLength[ply] = ply;
+}
+
+inline void clearPVTable()
+{
+	for (int i = 0; i < MaxSearchDepth; i++)
+	{
+		PvLength[i] = i;
+		for (int j = 0; j < MaxSearchDepth; j++)
+			PvTable[i][j] = Move::Null();
+	}
+}
+
+inline bool isMateScore(int score)
+{
+	return std::abs(score) >= Evaluation::CheckMate - MaxSearchDepth;
+}
 
 // Helper functions to store scores in TT and probe it from TT
 inline int scoreToTT(int score, int ply) 
@@ -76,9 +115,8 @@ inline void updateKillers(int ply, Move move)
 
 inline void updateHistory(Color c, Move move, int bonus)
 {
-	historyTable[c][move.src()][move.dst()] += bonus;    
-	historyTable[c][move.src()][move.dst()] =
-		std::clamp(historyTable[c][move.src()][move.dst()], -16384, 16384);
+	int& historyValue = historyTable[c][move.src()][move.dst()];
+	historyValue = std::clamp(historyValue + bonus, -16384, 16384);
 }
 
 inline bool updateTime(SearchInfo& info)
@@ -128,19 +166,18 @@ int quiescence(Position& pos, int alpha, int beta, int ply, int depth, SearchInf
 	while (picker.hasNext())
 	{
 		Move move = picker.pick();
-
-		// delta pruning 
 		Piece capturedPiece = pos.pieceOn(move.dst());
 		PieceType capturedType = (capturedPiece != NonePiece) ? pieceTypeOf(capturedPiece) : NonePieceType;
-		int captureValue = 0; // maximum material gain from this move
 		
+		// calculate maximum material gain from this move
+		int captureValue = 0;
 		if (capturedPiece != NonePiece) captureValue += Evaluation::PieceValue[capturedType];
 		if (move.promotion()) captureValue += Evaluation::PieceValue[move.promotionType()] - Evaluation::PieceValue[Pawn];
 		if (move.enPassant()) captureValue = Evaluation::PieceValue[Pawn];
 
-		// if even after the capture you are still 
-		// significantly below alpha, then this move 
-		// is unlikely to raise alpha and can be pruned
+		// Delta Pruning:
+		// if even after the capture you are still significantly below alpha, 
+		// then this move is unlikely to raise alpha and can be pruned
 		if (standPat + captureValue + 200 < alpha)
 			continue; // skip move
 
@@ -161,24 +198,28 @@ int quiescence(Position& pos, int alpha, int beta, int ply, int depth, SearchInf
 
 int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInfo& searchInfo)
 {
+	clearPV(ply);
 	searchInfo.nodes++;
-
-	int remainingDepth = maxDepth - ply;
-	Color c = pos.colorToMove();
 
 	// check for search cancellation
 	updateTime(searchInfo);
 	if (searchInfo.stopped) return -Evaluation::Infinity;
 
+	bool isRoot = (ply == 0);
+	int remainingDepth = maxDepth - ply;
+
+	Zobrist::Key key = pos.zobristKey();
+	Color c = pos.colorToMove();
+	bool isCheck = pos.checkers();
+	int phase = pos.phase();
+	
 	// check for 3 fold repetition
-	if (pos.isThreefoldRepetition(2)) return 0;
+	if (!isRoot && pos.isThreefoldRepetition(2)) return 0;
 
 	// Check for position in transposition table
-	using enum TranspositionTable::MoveBound;
-	const TranspositionTable::TTEntry* ttEntry = TT.probe(pos.zobristKey());
-	Move ttMove = (ttEntry != nullptr) ? ttEntry->bestMove : Move::Null();
+	const TranspositionTable::TTEntry* ttEntry = TT.probe(key);
 
-	if (ttEntry != nullptr && ttEntry->depth >= remainingDepth)
+	if (ttEntry != nullptr && ttEntry->depth >= remainingDepth && !isRoot)
 	{
 		int ttScore = scoreFromTT(ttEntry->score, ply);
 		if (ttEntry->bound == Lower) alpha = std::max(alpha, ttScore);
@@ -187,34 +228,16 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 		if (alpha >= beta) return alpha;
 	}
 
-	if (ply == maxDepth) return quiescence(pos, alpha, beta, ply + 1, ply + MaxQuiescenceDepth, searchInfo);
+	// start quescence search at max depth to minimize horizon effect
+	if (ply == maxDepth) 
+		return quiescence(pos, alpha, beta, ply + 1, ply + MaxQuiescenceDepth, searchInfo);
 
-	auto moves = generateMoves<GenType::All>(pos);
-
-	// check for stalemate/checkmate
-	if (moves.empty())
-	{
-		return (pos.checkers()) ? -Evaluation::CheckMate + ply : Evaluation::StaleMate;
-	}
-
-	TranspositionTable::TTEntry newEntry =
-	{
-		.key		= pos.zobristKey(),
-		.bestMove	= Move::Null(),
-		.score		= alpha,
-		.bound		= TranspositionTable::MoveBound::Upper,
-		.depth		= remainingDepth
-	};
-
-	bool isCheck = pos.checkers();
 	bool nullMoveAllowed = pos.stateInfo().prevMove != Move::Null();
 
-	// Null Move Pruning:
-	// if you skip your turn and you still fail high, 
-	// then this position is too good for you 
-	// and the opponent won't let you reach it, 
-	// so you can safely prune it
-	if (nullMoveAllowed && pos.phase() >= 2 && !isCheck && remainingDepth > 3)
+	// Null Move Pruning (https://www.chessprogramming.org/Null_Move_Pruning):
+	// if you skip your turn and you still fail high, then this position is too good for you 
+	// and the opponent won't let you reach it, so you can safely prune it
+	if (nullMoveAllowed && phase >= 2 && !isCheck && remainingDepth > 3)
 	{
 		int reduction = 3 + remainingDepth / 6;
 		int NMPDepth = std::max(ply + 1, maxDepth - reduction);
@@ -228,11 +251,9 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 
 	int staticEval = Evaluation::evaluate(pos);
 	
-	// Reverse Futility Pruning:
-	// if the static evaluation minus a margin, 
-	// is still above beta, its very likely 
-	// that this position will raise alpha 
-	// and cause a beta cutoff, so we can safely prune it
+	// Reverse Futility Pruning (https://www.chessprogramming.org/Reverse_Futility_Pruning):
+	// if the static evaluation minus a margin, is still above beta, its very likely 
+	// that this position will raise alpha and cause a beta cutoff, so we can safely prune it
 	if (!isCheck && remainingDepth <= 6)
 	{
 		// scale the margin linearly based on remaining depth, 
@@ -246,7 +267,25 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 		}
 	}
 
-	MovePicker picker(pos, moves, killerMoves[ply], historyTable, ttMove);
+	MoveList moves = generateMoves<GenType::All>(pos);
+
+	// check for stalemate/checkmate
+	if (moves.empty())
+	{
+		return isCheck ? -Evaluation::CheckMate + ply : Evaluation::StaleMate;
+	}
+
+	TranspositionTable::TTEntry newEntry =
+	{
+		.key = key,
+		.bestMove = Move::Null(),
+		.score = alpha,
+		.bound = Upper,
+		.depth = remainingDepth
+	};
+
+	Move bestMove = (ttEntry != nullptr) ? ttEntry->bestMove : prevPV[ply];
+	MovePicker picker(pos, moves, killerMoves[ply], historyTable, bestMove);
 	int eval = -Evaluation::Infinity;
 
 	while (picker.hasNext())
@@ -261,13 +300,13 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 
 		bool givesCheck = pos.checkers();
 
-		// Futility Pruning:
+		// Futility Pruning (https://www.chessprogramming.org/Futility_Pruning):
 		// if the static evaluation plus a margin is still below alpha, 
 		// then this move is unlikely to raise alpha and can be pruned
 		if (remainingDepth <= 3 
 			&& !isCapture  && !move.promotion() 
 			&& !isCheck  && !givesCheck
-			&& std::abs(alpha) < Evaluation::CheckMate - MaxSearchDepth)
+			&& !isMateScore(alpha))
 		{
 			static constexpr int futilityMargin[4] = { 0, 100, 200, 400 }; // in centipawns
 			int margin = futilityMargin[remainingDepth];
@@ -279,10 +318,13 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 			}
 		}
 
+		// Late Move Reduction (https://www.chessprogramming.org/Late_Move_Reductions):
+		// if the position is quiet and the move is late in the move ordering, 
+		// then we can search it with a reduced depth to save time,
 		bool doLMR =
 			remainingDepth >= 3 &&
 			picker.pickedCnt() >= 3 &&
-			!isCapture && !pos.checkers() &&
+			!isCapture && !givesCheck &&
 			!move.promotion() && !isCheck;
 
 		if (doLMR)
@@ -318,19 +360,19 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 			newEntry.bound = Exact;
 			newEntry.bestMove = move;
 			newEntry.score = scoreToTT(eval, ply);
+
+			updatePV(ply, move);
 		}
 
 		if (alpha >= beta)
 		{
-			newEntry.bound = Lower;
-			newEntry.score = scoreToTT(alpha, ply);
-			newEntry.bestMove = move;
-
 			if (!isCapture)
 			{
 				updateKillers(ply, move);
 				updateHistory(c, move, remainingDepth * remainingDepth);
 			}
+
+			newEntry.bound = Lower;
 
 			break; // beta cutoff
 		}
@@ -367,8 +409,7 @@ SearchResult search(Position& pos, int timeMs)
 	// check for stalemate/checkmate
 	if (moves.empty())
 	{
-		bool isCheckMate = pos.checkers();
-		searchResult.evaluation = isCheckMate ? -Evaluation::CheckMate : Evaluation::StaleMate;
+		searchResult.evaluation = pos.checkers() ? -Evaluation::CheckMate : Evaluation::StaleMate;
 		return searchResult;
 	}
 
@@ -376,107 +417,51 @@ SearchResult search(Position& pos, int timeMs)
 	Zobrist::Key zobristKey = pos.zobristKey();
 	int prevIterationEval = 0;
 
+	// Iterative Deepening (https://www.chessprogramming.org/Iterative_Deepening):
 	for (int currentMaxDepth = 1; currentMaxDepth <= 100; currentMaxDepth++)
 	{
-		// check for fitting transposition table entry with sufficient depth
-		using Bound = TranspositionTable::MoveBound;
-		const TranspositionTable::TTEntry* entry = TT.probe(zobristKey);
-		Move TTMove = (entry) ? entry->bestMove : Move::Null();
-		Move bestIterMove = moves[0];
-
-		if (entry != nullptr && entry->depth >= currentMaxDepth && entry->bound == Bound::Exact)
-		{
-			searchResult.bestMove = entry->bestMove;
-			searchResult.evaluation = entry->score * Evaluation::colorMultiplier(friendly);
-			searchResult.depth++;
-			continue;
-		}
-
 		// set initial delta for aspiration window to +/- 50 centipawns
 		int delta = Evaluation::PieceValue[Pawn] / 2;
-		int alpha, beta;
+		int alpha =  -Evaluation::Infinity;
+		int beta =  Evaluation::Infinity;
 
+		// set aspiration window around previous iteration evaluation
 		if (currentMaxDepth > 4)
 		{
-			// set aspiration window bounds around previous iteration's evaluation
 			alpha = prevIterationEval - delta;
 			beta = prevIterationEval + delta;
-		}
-		else
-		{
-			alpha = -Evaluation::Infinity;
-			beta = Evaluation::Infinity;
 		}
 
 		// Aspiration retry loop
 		while (true)
 		{
-			// search alpha is the best score found so far, 
-			// starting with the lower bound of the aspiration window
-			int searchAlpha = alpha;
-			bestIterMove = moves[0];
+			int score = negamax(pos, alpha, beta, 0, currentMaxDepth, searchInfo);
 
-			MovePicker picker(pos, moves, killerMoves[0], historyTable, TTMove);
+			if (searchInfo.stopped) goto searchStopped;
 
-			while (picker.hasNext())
+			if (score <= alpha)  // fail low
 			{
-				Move move = picker.pick();
-
-				pos.doMove(move);
-				int eval = -negamax(pos, -beta, -searchAlpha, 0, currentMaxDepth, searchInfo);
-				pos.undoMove();
-
-				if (searchInfo.stopped) goto searchStopped;
-
-				if (eval > searchAlpha)
-				{
-					searchAlpha = eval;
-					bestIterMove = move;
-				}
-
-				// search failed high already -> no need to continue searching
-				if (searchAlpha >= beta) break;
-			}
-
-			// store results in transposition table
-			TranspositionTable::TTEntry newEntry =
-			{
-				.key = zobristKey,
-				.bestMove = bestIterMove,
-				.score = searchAlpha,
-				.bound = Bound::Exact,
-				.depth = currentMaxDepth
-			};
-
-			// Fail low — widen lower bound and retry (gradual widening)
-			if (searchAlpha <= alpha)
-			{
-				newEntry.bound = Bound::Upper;
-				TT.store(std::move(newEntry));
 				alpha = std::max(alpha - delta, -Evaluation::Infinity);
 				delta *= 2;
 			}
-
-			// Fail high — widen upper bound and retry (gradual widening)
-			else if (searchAlpha >= beta)
+			else if (score >= beta)  // fail high
 			{
-				newEntry.bound = Bound::Lower;
-				TT.store(std::move(newEntry));
 				beta = std::min(beta + delta, Evaluation::Infinity);
 				delta *= 2;
 			}
-
-			// Score inside window
-			else
+			else  // inside window
 			{
-				newEntry.bound = Bound::Exact;
-				TT.store(std::move(newEntry));
-				prevIterationEval = searchAlpha;
+				prevIterationEval = score;
 				break;
 			}
 		}
 
-		searchResult.bestMove = bestIterMove;
+		// copy PV line from this iteration to previous iteration PV line
+		prevPVLength = PvLength[0];
+		for (int i = 0; i < prevPVLength; i++)
+			prevPV[i] = PvTable[0][i];
+
+		searchResult.bestMove = PvTable[0][0];  // root move is just the first PV entry
 		searchResult.evaluation = prevIterationEval * Evaluation::colorMultiplier(friendly);
 		searchResult.depth++;
 
@@ -493,7 +478,15 @@ SearchResult search(Position& pos, int timeMs)
 	}
 
 searchStopped:
-	searchResult.nodes = searchInfo.nodes;
+	// print pv
+	std::cout << "info pv ";
+
+	for (int i = 0; i < PvLength[0]; i++)
+		std::cout << PvTable[0][i].toString() << " ";
+
+	std::cout << "\n";
+
+	searchResult.nodes = searchInfo.nodes;	
 	return searchResult;
 }
 
