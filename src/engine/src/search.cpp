@@ -164,7 +164,7 @@ int quiescence(Position& pos, int alpha, int beta, int ply, int depth, SearchInf
 			.bestMove = Move::Null(),
 			.score = scoreToTT(standPat, ply),
 			.bound = Lower,
-			.depth = 0
+			.depth = 0,
 		});
 
 		return standPat;
@@ -183,7 +183,7 @@ int quiescence(Position& pos, int alpha, int beta, int ply, int depth, SearchInf
 		.bestMove = Move::Null(),
 		.score = alpha,
 		.bound = Upper,
-		.depth = 0
+		.depth = 0,
 	};
 
 	Move ttMove = (ttEntry != nullptr) ? ttEntry->bestMove : Move::Null();
@@ -322,7 +322,7 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 		.bestMove = Move::Null(),
 		.score = alpha,
 		.bound = Upper,
-		.depth = remainingDepth
+		.depth = remainingDepth,
 	};
 
 	Move bestMove = (ttEntry != nullptr) ? ttEntry->bestMove : prevPV[ply];
@@ -428,6 +428,10 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 
 SearchResult search(Position& pos, int timeMs)
 {
+	TT.startNewSearch();
+	ageKillerMoves();
+	ageHistory();
+
 	SearchInfo searchInfo =
 	{
 		.start = Clock::now(),
@@ -443,9 +447,6 @@ SearchResult search(Position& pos, int timeMs)
 		.nodes = 0,
 		.depth = 0
 	};
-
-	ageKillerMoves();
-	ageHistory();
 
 	MoveList moves = generateMoves<GenType::All>(pos);
 
