@@ -43,6 +43,7 @@ TEST_CASE("perft suite", "[movegen]")
 
     Zobrist::init();
     Precomputed::init();
+    Evaluation::init();
 
     for (auto& [fen, expectedNodesV, maxDepth] : cases)
     {

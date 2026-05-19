@@ -5,8 +5,10 @@ namespace Bratwurst::Search
 	constexpr int HeuristicCaptureBonus = 200;
 	constexpr int HeuristicPromotionBonus = 1000;
 
-	int score_move(const Position& pos, Move move, Move* killers, const int history[][64][64])
+	int score_move(const Position& pos, Move move, Move* killers, const int history[][64][64], Move ttMove)
 	{
+		if (move == ttMove) return Evaluation::Infinity;
+
 		int eval = 0;
 
 		Piece srcPiece = pos.pieceOn(move.src());
@@ -15,8 +17,8 @@ namespace Bratwurst::Search
 
 		if (capturePiece != NonePiece)
 		{
-			eval += Evaluation::TypeValue[pieceTypeOf(capturePiece)];
-			eval -= Evaluation::TypeValue[pieceTypeOf(srcPiece)] >> 3;
+			eval += Evaluation::PieceValue[capturePiece];
+			eval -= Evaluation::PieceValue[srcPiece] >> 3;
 			eval += HeuristicCaptureBonus;
 		}
 
@@ -37,12 +39,12 @@ namespace Bratwurst::Search
 		// if you move to a square that is attacked by a pawn, you likely loose your piece
 		if (Precomputed::pseudoAttacks[makePiece(c, Pawn)][move.dst()] & pos.pieceBB(~c, Pawn))
 		{
-			eval -= Evaluation::TypeValue[pieceTypeOf(srcPiece)];
+			eval -= Evaluation::PieceValue[srcPiece];
 		}
 
 		if (move.promotion())
 		{
-			eval += HeuristicPromotionBonus + Evaluation::TypeValue[move.promotionType()];
+			eval += HeuristicPromotionBonus + Evaluation::PieceValue[move.promotionType()];
 		}
 
 		return eval;

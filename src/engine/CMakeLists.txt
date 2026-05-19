@@ -7,6 +7,6 @@ add_library(Engine STATIC
 	src/move_picker.cpp
 	src/move.cpp
 	src/uci.cpp
-)
+	src/evaluation_constants.cpp)
 
 target_include_directories(Engine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)

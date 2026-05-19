@@ -30,11 +30,9 @@ TranspositionTable TT(256); // 256 MB
 Move killerMoves[MaxSearchDepth][2];
 int historyTable[ColorNum][SquareNum][SquareNum];
 
-// keeps track of PV
+// PV tables
 Move PvTable[MaxSearchDepth][MaxSearchDepth];
 int  PvLength[MaxSearchDepth] = {};
-
-// previous iteration PV
 Move prevPV[MaxSearchDepth];
 int  prevPVLength = 0;
 
@@ -505,7 +503,7 @@ SearchResult search(Position& pos, int timeMs)
 		for (int i = 0; i < prevPVLength; i++)
 			prevPV[i] = PvTable[0][i];
 
-		searchResult.bestMove = PvTable[0][0];  // root move is just the first PV entry
+		searchResult.bestMove = prevPV[0];  // root move is just the first PV entry
 		searchResult.evaluation = prevIterationEval * Evaluation::colorMultiplier(friendly);
 		searchResult.depth++;
 
@@ -525,8 +523,8 @@ searchStopped:
 	// print pv
 	std::cout << "info pv ";
 
-	for (int i = 0; i < PvLength[0]; i++)
-		std::cout << PvTable[0][i].toString() << " ";
+	for (int i = 0; i < prevPVLength; i++)
+		std::cout << prevPV[i].toString() << " ";
 
 	std::cout << "\n";
 

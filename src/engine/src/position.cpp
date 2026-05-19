@@ -1,10 +1,11 @@
 #include <engine/position/position.h>
 
-#include <engine/move_gen/attacks.h>
 #include <sstream>
 
 namespace Bratwurst
 {
+
+using namespace Evaluation;
 
 void Position::clear() 
 {
@@ -12,15 +13,9 @@ void Position::clear()
     std::fill(m_typeBBs, m_typeBBs + PieceTypeNum, 0ULL);
     std::fill(m_colorBBs, m_colorBBs + ColorNum, 0ULL);
 
-    while (!m_stateHistory.empty()) m_stateHistory.pop();
-
+    m_stateHistory.clear();
     m_colorToMove = NoneColor;
     m_fullMoveCounter = 0;
-    m_material = 0;
-
-    m_egPSQT = 0;
-    m_mgPSQT = 0;
-    m_phase = 0;
 }
 
 /* Parse a chess position from Forsyth-Edwards Notation (FEN)
@@ -125,7 +120,7 @@ std::expected<Position, Position::FenError> Position::fromFEN(const std::string&
 
     pos.updateCheckers();
     pos.updatePinned();
-    pos.initZobrist();
+    pos.recomputeState();
 
     return pos;
 }
@@ -187,154 +182,163 @@ std::string Position::fen() const
 
 void Position::updatePinned()
 {
-    Color friendly = m_colorToMove;
-    Color enemy = ~friendly;
-    Square kingSq = kingSquare(friendly);
-    Bitboard friendlyPieces = colorBB(friendly);
-    Bitboard enemyPieces = colorBB(enemy);
-    Bitboard occupancy = friendlyPieces | enemyPieces;
+    StateInfo& st = stateInfo();
 
-    Bitboard potentialPinned = attacksBB<Queen>(kingSq, occupancy) & friendlyPieces;
-    occupancy ^= potentialPinned;
+    Color c = m_colorToMove;
+    Square kingSq = kingSquare(c);
+    Bitboard occupancy = occupancyBB();
 
-    Bitboard rooks = typeBB(Rook, Queen) & enemyPieces;
-    Bitboard bishops = typeBB(Bishop, Queen) & enemyPieces;
-    Bitboard XRayRookAttacks = attacksBB<Rook>(kingSq, occupancy);
-    Bitboard XRayBishopAttacks = attacksBB<Bishop>(kingSq, occupancy);
-    Bitboard pinners = (XRayRookAttacks & rooks) | (XRayBishopAttacks & bishops);
+    Bitboard alignedRooks = Precomputed::pseudoAttacks[Rook][kingSq] & typeBB(Rook, Queen);
+    Bitboard alignedBishops = Precomputed::pseudoAttacks[Bishop][kingSq] & typeBB(Bishop, Queen);
+    Bitboard potentialPinners = (alignedRooks | alignedBishops) & colorBB(~c);
 
-    Bitboard pinned = 0ULL;
+    st.pinned = 0ULL;
 
-    while (pinners)
+    while (potentialPinners)
     {
-        Square pinner = popLsb(pinners);
-        pinned |= (Precomputed::lineBBs[1][kingSq][pinner] & friendlyPieces);
-    }
+        Square pinner = popLsb(potentialPinners);
+        Bitboard b = betweenBB(kingSq, pinner) & occupancy;
 
-    stateInfo().pinned = pinned;
+        if (!exactlyOne(b) || (b & colorBB(~c))) continue;
+
+        st.pinned |= b;
+    }
 }
 
 void Position::doNullMove()
 {
+    StateInfo newSt;
+    const StateInfo& prevSt = stateInfo();
+    std::memcpy(&newSt, &prevSt, offsetof(StateInfo, enPassantSquare));
 
-    const StateInfo& prevStateInfo = stateInfo();
+    newSt.capturedPiece     = NonePiece;
+    newSt.enPassantSquare   = NoneSquare;
+    newSt.prevMove          = Move::Null(); 
+    newSt.checkers          = 0ULL;
 
-    // Save current state for undo/redo
-    StateInfo newStateInfo =
-    {
-        .castlingRights = prevStateInfo.castlingRights,
-        .halfMoveClock = uint8(prevStateInfo.halfMoveClock + 1),
-        .enPassantSquare = NoneSquare,
-        .capturedPiece = NonePiece,
-        .prevMove = Move::Null(),
-        .checkers = 0ULL,
-        .zobristKey = prevStateInfo.zobristKey,
-    };
-
-    std::memcpy(newStateInfo.material, prevStateInfo.material, sizeof(prevStateInfo.material));
+    newSt.halfMoveClock ++;
     
-    if (prevStateInfo.enPassantSquare != NoneSquare)
+    if (prevSt.enPassantSquare != NoneSquare)
     {
-        File epFile = fileOf(prevStateInfo.enPassantSquare);
-        newStateInfo.zobristKey ^= Zobrist::enPassant[epFile];
-        newStateInfo.zobristKey ^= Zobrist::enPassant[NoneFile];
+        File epFile = fileOf(prevSt.enPassantSquare);
+        newSt.zobristKey ^= Zobrist::enPassant[epFile];
+        newSt.zobristKey ^= Zobrist::enPassant[NoneFile];
     }
 
-    m_fullMoveCounter += m_colorToMove;
+    newSt.zobristKey ^= Zobrist::side;
+    m_fullMoveCounter += (m_colorToMove == Black) ? 1 : 0;
     m_colorToMove = ~m_colorToMove;
-    newStateInfo.zobristKey ^= Zobrist::side;
 
-    m_stateHistory.push(newStateInfo);
-
+    m_stateHistory.push(std::move(newSt));
     updatePinned();
 }
 
 void Position::undoNullMove()
 {
+    m_fullMoveCounter -= (m_colorToMove == White) ? 1 : 0;
     m_colorToMove = ~m_colorToMove;
-    m_fullMoveCounter -= m_colorToMove;
     m_stateHistory.pop();
 }
 
 void Position::doMove(Move move)
 {
+    ASSERT(move != Move::Null());
+
     Square src = move.src();
     Square dst = move.dst();
-
-    const StateInfo& prevStateInfo = stateInfo();
+    Color friendly = m_colorToMove;
+    Color enemy = ~friendly;
 
     Piece srcPiece = m_pieces[src];
     PieceType srcType = pieceTypeOf(srcPiece);
-    Color friendly = m_colorToMove;
-    Color enemy = ~m_colorToMove;
-
     Piece capturedPiece = m_pieces[dst];
     bool isCapture = (capturedPiece != NonePiece);
 
     ASSERT(colorOf(srcPiece) == friendly);
 
-    // Save current state for undo/redo
-    StateInfo newStateInfo =
-    {
-        .castlingRights = prevStateInfo.castlingRights,
-        .halfMoveClock = uint8(prevStateInfo.halfMoveClock + 1),
-        .enPassantSquare = NoneSquare,
-        .capturedPiece = capturedPiece,
-        .prevMove = move,
-        .zobristKey = prevStateInfo.zobristKey,
-    };
+    StateInfo newSt;
+    const StateInfo& prevSt = stateInfo();
+    std::memcpy(&newSt, &prevSt, offsetof(StateInfo, enPassantSquare));
 
-    // Handle special cases
+    newSt.capturedPiece     = capturedPiece;
+    newSt.enPassantSquare   = NoneSquare;
+    newSt.prevMove          = move;
+
+    newSt.halfMoveClock ++;
+
     if (isCapture)
     {
         ASSERT(colorOf(capturedPiece) == enemy);
         ASSERT(pieceTypeOf(capturedPiece) != King);
 
-        // Remove captured piece from dst and update zobrist + halfmove clock
         removePiece(dst, capturedPiece);
-        newStateInfo.zobristKey ^= Zobrist::piece[capturedPiece][dst];
-        newStateInfo.halfMoveClock = 0;
+
+        int32 PsqtEntry = PSQT[capturedPiece][dst];
+        newSt.mgPSQT -= mg(PsqtEntry);
+        newSt.egPSQT -= eg(PsqtEntry);
+
+        newSt.zobristKey ^= Zobrist::piece[capturedPiece][dst];
+        newSt.material[enemy] -= PieceValue[capturedPiece];
+        newSt.phase -= PiecePhaseValue[capturedPiece];
+
+        newSt.halfMoveClock = 0;
 
         // update pawnKey
 #ifndef DISABLE_PAWN_HASH
-		if (pieceTypeOf(capturedPiece) == Pawn)
-            newStateInfo.pawnKey ^= Zobrist::piece[capturedPiece][dst];
+        if (pieceTypeOf(capturedPiece) == Pawn)
+            newSt.pawnKey ^= Zobrist::piece[capturedPiece][dst];
 #endif
 
     }
     if (move.promotion())
     {
-        // Remove pawn, place promotion piece and update zobrist key
         ASSERT(srcPiece == makePiece(friendly, Pawn));
 
-        Piece promotionPiece = makePiece(friendly, move.promotionType());
-        newStateInfo.zobristKey ^= Zobrist::piece[srcPiece][src];
-        newStateInfo.zobristKey ^= Zobrist::piece[promotionPiece][dst];
-		newStateInfo.pawnKey ^= Zobrist::piece[srcPiece][src];
-        
+        Piece promoPiece = makePiece(friendly, move.promotionType());
+
+        int32 srcPSQT = PSQT[srcPiece][src];
+        int32 promotionPSQT = PSQT[promoPiece][dst];
+        newSt.mgPSQT += mg(promotionPSQT) - mg(srcPSQT);
+        newSt.egPSQT += eg(promotionPSQT) - eg(srcPSQT);
+
+        newSt.material[friendly] += PieceValue[promoPiece] - PieceValue[Pawn];
+        newSt.zobristKey ^= Zobrist::piece[srcPiece][src];
+        newSt.zobristKey ^= Zobrist::piece[promoPiece][dst];
+        newSt.phase += PiecePhaseValue[promoPiece];
+
+#ifndef DISABLE_PAWN_HASH
+        newSt.pawnKey ^= Zobrist::piece[srcPiece][src];
+#endif
+
         removePiece(src, srcPiece);
-        placePiece(dst, promotionPiece);
+        placePiece(dst, promoPiece);
 
     }
     else if (move.enPassant())
     {
-        // Capture pawn behind dst
+        // cpature pawn from en passant
         Square enemyPawnSquare = dst + ((friendly == White) ? Down : Up);
         Piece enemyPawn = makePiece(enemy, Pawn);
+        int32 epPSQT = PSQT[enemyPawn][enemyPawnSquare];
 
         ASSERT(m_pieces[enemyPawnSquare] == enemyPawn);
 
-        removePiece(enemyPawnSquare, enemyPawn);
-        newStateInfo.zobristKey ^= Zobrist::piece[enemyPawn][enemyPawnSquare];
+        newSt.zobristKey ^= Zobrist::piece[enemyPawn][enemyPawnSquare];
+        newSt.material[enemy] -= PieceValue[Pawn];
+        newSt.mgPSQT -= mg(epPSQT);
+        newSt.egPSQT -= eg(epPSQT);
 
 #ifndef DISABLE_PAWN_HASH
-		newStateInfo.pawnKey ^= Zobrist::piece[enemyPawn][enemyPawnSquare];
+        newSt.pawnKey ^= Zobrist::piece[enemyPawn][enemyPawnSquare];
 #endif
+
+        removePiece(enemyPawnSquare, enemyPawn);
     }
     else if (move.castling())
     {
         // Move rook in castling
-        CastlingRight right = makeCastlingRight(friendly, move.castlingSide());
+        CastlingSide side = move.castlingSide();
+        CastlingRight right = makeCastlingRight(friendly, side);
         Piece friendlyRook = makePiece(friendly, Rook);
         Square rookSrc = CastlingRookSrc[right];
         Square rookDst = CastlingRookDst[right];
@@ -342,68 +346,79 @@ void Position::doMove(Move move)
         ASSERT(srcType == King && capturedPiece == NonePiece);
         ASSERT(m_pieces[rookSrc] == friendlyRook && m_pieces[rookDst] == NonePiece);
 
+        int32 srcPSQT = PSQT[friendlyRook][rookSrc];
+        int32 dstPSQT = PSQT[friendlyRook][rookDst];
+
+        newSt.zobristKey ^= Zobrist::piece[friendlyRook][rookSrc];
+        newSt.zobristKey ^= Zobrist::piece[friendlyRook][rookDst];
+        newSt.mgPSQT += mg(dstPSQT) - mg(srcPSQT);
+        newSt.egPSQT += eg(dstPSQT) - eg(srcPSQT);
+
         movePiece(rookSrc, rookDst, friendlyRook);
-        newStateInfo.zobristKey ^= Zobrist::piece[friendlyRook][rookSrc];
-        newStateInfo.zobristKey ^= Zobrist::piece[friendlyRook][rookDst];
     }
 
     // move piece normally
     if (!move.promotion())
     {
-        movePiece(src, dst, srcPiece);
-        newStateInfo.zobristKey ^= Zobrist::piece[srcPiece][src];
-        newStateInfo.zobristKey ^= Zobrist::piece[srcPiece][dst];
+        int srcEntry = Evaluation::PSQT[srcPiece][src];
+        int dstEntry = Evaluation::PSQT[srcPiece][dst];
+
+        // update zobrist key for piece movement
+        newSt.zobristKey ^= Zobrist::piece[srcPiece][src];
+        newSt.zobristKey ^= Zobrist::piece[srcPiece][dst];
+        newSt.mgPSQT += Evaluation::mg(dstEntry) - Evaluation::mg(srcEntry);
+        newSt.egPSQT += Evaluation::eg(dstEntry) - Evaluation::eg(srcEntry);
 
 #ifndef DISABLE_PAWN_HASH
-		if (srcType == Pawn) newStateInfo.pawnKey ^= Zobrist::piece[srcPiece][src] | Zobrist::piece[srcPiece][dst];
+        if (srcType == Pawn) newSt.pawnKey ^= Zobrist::piece[srcPiece][src] | Zobrist::piece[srcPiece][dst];
 #endif
+
+        movePiece(src, dst, srcPiece);
     }
 
-    // Update castling rights
+    // update Castling rigths when king or rook moves or get captured
     if (srcType == King)
     {
-        newStateInfo.zobristKey ^= Zobrist::castling[newStateInfo.castlingRights.data];
-        newStateInfo.castlingRights.disallowCastling(makeCastlingRight(friendly, KingSide));
-        newStateInfo.castlingRights.disallowCastling(makeCastlingRight(friendly, QueenSide));
-        newStateInfo.zobristKey ^= Zobrist::castling[newStateInfo.castlingRights.data];
+        newSt.zobristKey ^= Zobrist::castling[newSt.castlingRights.data];
+        newSt.castlingRights.disallowCastling(makeCastlingRight(friendly, KingSide));
+        newSt.castlingRights.disallowCastling(makeCastlingRight(friendly, QueenSide));
+        newSt.zobristKey ^= Zobrist::castling[newSt.castlingRights.data];
     }
     if (srcType == Rook || capturedPiece == makePiece(enemy, Rook))
     {
-        newStateInfo.zobristKey ^= Zobrist::castling[newStateInfo.castlingRights.data];
         Square rookSquare = (srcType == Rook) ? src : dst;
         CastlingRight right = castlingRightByRookSrc(rookSquare);
-        if (isValid(right)) newStateInfo.castlingRights.disallowCastling(right);
-        newStateInfo.zobristKey ^= Zobrist::castling[newStateInfo.castlingRights.data];
+        newSt.zobristKey ^= Zobrist::castling[newSt.castlingRights.data];
+        if (isValid(right)) newSt.castlingRights.disallowCastling(right);
+        newSt.zobristKey ^= Zobrist::castling[newSt.castlingRights.data];
     }
 
     // remove previous epSquare from zobrist key
-    File epFile = fileOf(prevStateInfo.enPassantSquare);
+    File epFile = fileOf(prevSt.enPassantSquare);
     uint64 epZobrist = Zobrist::enPassant[epFile];
-    newStateInfo.zobristKey ^= epZobrist;
+    newSt.zobristKey ^= epZobrist;
 
-    // Reset halfmove clock on pawn move nad handle ep
     if (srcType == Pawn)
     {
-        newStateInfo.halfMoveClock = 0;
+        // reset halfmove clock on pawn push
+        newSt.halfMoveClock = 0;
         bool doublePawnPush = std::abs(int(src) - int(dst)) == 2 * Up;
 
+        // update en passant square on double pawn push
         if (doublePawnPush)
         {
             Square epSquare = src + pawnPushDir(friendly);
-            newStateInfo.enPassantSquare = epSquare;
+            newSt.enPassantSquare = epSquare;
             File epFile = fileOf(epSquare);
-            newStateInfo.zobristKey ^= Zobrist::enPassant[epFile];
+            newSt.zobristKey ^= Zobrist::enPassant[epFile];
         }
     }
 
-    // Increment fullmove counter after Black's move 
-    m_fullMoveCounter += friendly;
-
     m_colorToMove = enemy;
-    newStateInfo.zobristKey ^= Zobrist::side;
+    newSt.zobristKey ^= Zobrist::side;
+    m_fullMoveCounter += (friendly == Black) ? 1 : 0; // fullmove finishes after black moves
 
-    m_stateHistory.push(newStateInfo);
-
+    m_stateHistory.push(std::move(newSt));
     updateCheckers();
     updatePinned();
 }
@@ -411,19 +426,20 @@ void Position::doMove(Move move)
 void Position::undoMove()
 {
     ASSERT(m_stateHistory.size() > 1);
-    const StateInfo& prevStateInfo = stateInfo();
-    Move move = prevStateInfo.prevMove;
+
+    const StateInfo& st = stateInfo();
+    Move move = st.prevMove;
+
+    ASSERT(move != Move::Null());
 
     Square src = move.src();
     Square dst = move.dst();
-
     Color enemy = m_colorToMove;       // side that just moved
     Color friendly = ~m_colorToMove;   // side to move after undo
 
     Piece piece = m_pieces[dst];
     PieceType pieceType = pieceTypeOf(piece);
-
-    Piece capturedPiece = prevStateInfo.capturedPiece;
+    Piece capturedPiece = st.capturedPiece;
     bool isCapture = (capturedPiece != NonePiece);
 
     if (!move.promotion())
@@ -460,13 +476,12 @@ void Position::undoMove()
     }
     if (isCapture)
     {
-        // Restore captured piece
         ASSERT(colorOf(capturedPiece) == enemy);
         placePiece(dst, capturedPiece);
     }
 
-    m_fullMoveCounter -= friendly;
-    m_colorToMove = friendly;
+    m_fullMoveCounter -= (friendly == White) ? 1 : 0;
+    m_colorToMove = ~m_colorToMove;
     m_stateHistory.pop();
 }
 }

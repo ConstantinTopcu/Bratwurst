@@ -6,7 +6,6 @@
 namespace Bratwurst::Evaluation
 {
 
-
 struct PawnScore
 {
 	int mg = 0;
@@ -16,15 +15,30 @@ struct PawnScore
 	PawnScore& operator+=(const PawnScore& s) { mg += s.mg; eg += s.eg; return *this; }
 };
 
-
 struct PawnEntry
 {
 	Zobrist::Key key;
 	PawnScore score;
 };
 
-static constexpr int PAWN_TABLE_SIZE = 1 << 16; // 65536 entries
+
+// Pawn hash table
+inline constexpr int PAWN_TABLE_SIZE = 1 << 16; // 65536 entries
 inline PawnEntry pawnTable[PAWN_TABLE_SIZE];
+
+// some constants
+inline constexpr int MobilityTable[PieceTypeNum][28] =
+{
+	{}, // Pawn
+	{ -24,-18,-12,-6,0,4,8,12,16 }, // knight
+	{  -20,-14,-10,-6,-2,2,6,10,14,18,22,26,30,34 }, // bishop
+	{ -12,-8,-5,-2,0,2,4,6,8,10,12,14,16,18,20 }, // rook
+	{ -10,-8,-6,-4,-2,0,1,2,3,4,5,6,7,8,9,10,11,12, 13,14,15,16,17,18,19,20,21,22 }, // queen
+	{} // King
+};
+
+inline constexpr int AttackerWeight[PieceTypeNum] = { 0, 20, 20, 40, 80, 0 };
+inline constexpr int AttackWeight[10] = { 0, 50, 75, 88, 94, 97, 99, 99, 99, 99 };
 
 inline int colorMultiplier(Color c)
 {
@@ -65,11 +79,10 @@ inline int evalAttackingKingZone(const Position& pos, Color c)
 			Square sq = popLsb(pieces);
 			Bitboard attacks = attacksBB<pt>(sq, occupancy) & kingZone;
 
-			if (attacks)
-			{
-				attackingPieceCnt++;
-				valueOfAttacks += popCnt(attacks) * AttackerWeight[pt];
-			}
+			if (attacks == 0UL) continue;
+
+			attackingPieceCnt++;
+			valueOfAttacks += popCnt(attacks) * AttackerWeight[pt];
 		}
 	};
 
@@ -182,11 +195,11 @@ inline int evalPawnStructure(const Position& pos)
 	PawnEntry& entry = pawnTable[pawnKey & (PAWN_TABLE_SIZE-1)];
 
 	int mgPhase = pos.phase();
-	int egPhase = MAX_PHASE - pos.phase();
+	int egPhase = MaxPhase - pos.phase();
 
 	if (entry.key == pawnKey)
 	{
-		return (entry.score.mg * mgPhase + entry.score.eg * egPhase) / MAX_PHASE;
+		return (entry.score.mg * mgPhase + entry.score.eg * egPhase) / MaxPhase;
 	}
 
 	//Pawn structure
@@ -198,7 +211,7 @@ inline int evalPawnStructure(const Position& pos)
 
 	entry = { pawnKey, totalPawnEval};
 
-	return (totalPawnEval.mg * mgPhase + totalPawnEval.eg * egPhase) / MAX_PHASE;
+	return (totalPawnEval.mg * mgPhase + totalPawnEval.eg * egPhase) / MaxPhase;
 }
 
 inline int bishopPairBonus(const Position& pos, Color c)
@@ -239,11 +252,11 @@ inline int evaluate(const Position& pos)
 {
 	Color c = pos.colorToMove();
 	const int phase = pos.phase();
-	const int egPhase = MAX_PHASE - phase;
+	const int egPhase = MaxPhase - phase;
 	const int materialEval = pos.material();
 
 	// PSQT bonus
-	const int psqtEval = (pos.mgPSQT() * phase + pos.egPSQT() * egPhase) / MAX_PHASE;
+	const int psqtEval = (pos.mgPSQT() * phase + pos.egPSQT() * egPhase) / MaxPhase;
 
 	// mobility bonus
 	const int mobilityEval =
@@ -255,7 +268,7 @@ inline int evaluate(const Position& pos)
 	// king safety (midgame only)
 	int attackingKingZoneEval = evalAttackingKingZone(pos, White) - evalAttackingKingZone(pos, Black);
 	int pawnShieldEval = evalPawnShield(pos, White) - evalPawnShield(pos, Black);
-	int kingSafetyEval = ((attackingKingZoneEval + pawnShieldEval) * phase) / MAX_PHASE;
+	int kingSafetyEval = ((attackingKingZoneEval + pawnShieldEval) * phase) / MaxPhase;
 
 	int bishopPairEval = bishopPairBonus(pos, White) - bishopPairBonus(pos, Black);
 	int rookFileEval = evalOpenRookFiles(pos, White) - evalOpenRookFiles(pos, Black);

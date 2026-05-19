@@ -91,6 +91,12 @@ inline int popCnt(Bitboard mask)
 #endif
 }
 
+// returns true if exactly one bit is se
+inline bool exactlyOne(Bitboard b)
+{
+	return b && (b & (b - 1)) == 0ULL;
+}
+
 template<Direction d>
 constexpr Bitboard shift(Bitboard b)
 {
@@ -100,7 +106,7 @@ constexpr Bitboard shift(Bitboard b)
 	return b;
 }
 
-inline std::string toString(Bitboard b) 
+inline std::string bbToString(Bitboard b) 
 {
 	std::string str;
 

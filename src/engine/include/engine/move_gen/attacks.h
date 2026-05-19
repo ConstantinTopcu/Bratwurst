@@ -63,4 +63,14 @@ inline Bitboard attacksBB(Square s, [[maybe_unused]] Bitboard blockers = 0ULL)
 	else if constexpr (pt == King) return Precomputed::pseudoAttacks[King][s];
 }
 
+inline Bitboard betweenBB(Square s1, Square s2)
+{
+	return Precomputed::lineBBs[1][s1][s2];
+}
+
+inline Bitboard lineBB(Square s1, Square s2)
+{
+	return Precomputed::lineBBs[0][s1][s2];
+}
+
 }

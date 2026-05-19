@@ -10,7 +10,7 @@
 #include <engine/types/zobrist.h>
 
 #include <engine/move_gen/attacks.h>
-#include <engine/position/StateInfo.h>
+#include <engine/position/state_info.h>
 #include <engine/search/evaluation_constants.h>
  
 #include <expected>
@@ -57,7 +57,7 @@ public:
 
 	// avoid this function when incremental, manual updates are possible, 
 	// since it recalculates the entire zobrist key from scratch
-	inline void initZobrist();
+	inline void recomputeState();
 	inline void updateCheckers();
 	inline void updatePinned();
 
@@ -89,10 +89,10 @@ public:
 	[[nodiscard]] inline Zobrist::Key zobristKey() const { return stateInfo().zobristKey; }
 	[[nodiscard]] inline Zobrist::Key pawnKey() const { return stateInfo().pawnKey; }
 
-	[[nodiscard]] inline int material() const { return m_material; }
-	[[nodiscard]] inline int egPSQT() const { return m_egPSQT; }
-	[[nodiscard]] inline int mgPSQT() const { return m_mgPSQT; }
-	[[nodiscard]] inline int phase() const { return std::min(m_phase, Evaluation::MAX_PHASE); }
+	[[nodiscard]] inline int material() const { return stateInfo().material[White] - stateInfo().material[Black]; }
+	[[nodiscard]] inline int egPSQT() const { return stateInfo().egPSQT; }
+	[[nodiscard]] inline int mgPSQT() const { return stateInfo().mgPSQT; }
+	[[nodiscard]] inline int phase() const { return std::min<int>(stateInfo().phase, Evaluation::MaxPhase); }
 
 	[[nodiscard]] inline std::string toString() const;
 
@@ -104,15 +104,6 @@ private:
 	Color m_colorToMove;
 	uint16 m_fullMoveCounter;
 	StateHistory m_stateHistory;
-
-	// Incrementally updated to speed up evaluation
-	int m_material;
-	int m_egPSQT;
-	int m_mgPSQT;
-
-	// this value is an indicator to how far the game has progressed.
-	// 24 meaning the game has just started and 0 there are no pieces except pawns on the board.
-	int m_phase;
 
 private:
 	// due to performance these 3 functions don't check for required absence or presence of pieces internally
@@ -182,11 +173,10 @@ inline bool Position::isThreefoldRepetition(int repCnt) const
 	int size = static_cast<int>(m_stateHistory.size());
 	for (int i = size - 1; i >= size - 1 - maxBack; i -= 2) // step by 2: same side to move
 	{
-		if (m_stateHistory[i].zobristKey == current)
-		{
-			++repetitions;
-			if (repetitions >= repCnt) return true;
-		}
+		if (m_stateHistory[i].zobristKey != current) continue;
+
+		++repetitions;
+		if (repetitions >= repCnt) return true;
 	}
 
 	return false;
@@ -197,20 +187,50 @@ inline void Position::updateCheckers()
 	stateInfo().checkers = attackers(kingSquare(m_colorToMove), ~m_colorToMove, occupancyBB());
 }
 
-inline void Position::initZobrist()
+inline void Position::recomputeState()
 {
+	StateInfo& st = stateInfo();
+
 	Zobrist::Key zobrist = 0ULL;
+	Zobrist::Key pawnKey = 0ULL;
+	uint16 material[ColorNum] = { 0, 0 };
+	int16 mgPSQT = 0;
+	int16 egPSQT = 0;
+	uint16 phase = 0;
 
 	for (Square s = A1; s < SquareNum; s++)
 	{
-		zobrist ^= Zobrist::piece[pieceOn(s)][s];
+		Piece piece = pieceOn(s);
+		Color c = colorOf(piece);
+		PieceType pt = pieceTypeOf(piece);
+
+		if (piece == NonePiece) continue;
+
+		int32 psqt = Evaluation::PSQT[piece][s];
+		mgPSQT += Evaluation::mg(psqt);
+		egPSQT += Evaluation::eg(psqt);
+
+		material[c] += Evaluation::PieceValue[piece];
+		phase += Evaluation::PiecePhaseValue[piece];
+		zobrist ^= Zobrist::piece[piece][s];
+
+#ifndef DISABLE_PAWN_HASH
+		if (pt == Pawn) pawnKey ^= Zobrist::piece[piece][s];
+#endif
+
 	}
 
-	zobrist ^= Zobrist::castling[stateInfo().castlingRights.data];
-	zobrist ^= Zobrist::enPassant[stateInfo().enPassantSquare];
+	zobrist ^= Zobrist::castling[st.castlingRights.data];
+	zobrist ^= Zobrist::enPassant[fileOf(st.enPassantSquare)];
 	zobrist ^= (m_colorToMove == Black) ? Zobrist::side : 0ULL;
 
-	stateInfo().zobristKey = zobrist;
+	st.zobristKey = zobrist;
+	st.pawnKey = pawnKey;
+	st.material[White] = material[White];
+	st.material[Black] = material[Black];
+	st.mgPSQT = mgPSQT;
+	st.egPSQT = egPSQT;
+	st.phase = phase;
 }
 
 inline void Position::movePiece(Square src, Square dst, Piece srcPiece) 
@@ -220,20 +240,14 @@ inline void Position::movePiece(Square src, Square dst, Piece srcPiece)
 	ASSERT(m_pieces[dst] == NonePiece);
 	ASSERT(isValid(srcPiece));
 
-	// Update PSQT
-	int srcEntry = Evaluation::PSQT[srcPiece][src];
-	int dstEntry = Evaluation::PSQT[srcPiece][dst];
-	m_mgPSQT += Evaluation::mg(dstEntry) - Evaluation::mg(srcEntry);
-	m_egPSQT += Evaluation::eg(dstEntry) - Evaluation::eg(srcEntry);
-
-	// move the actuall piece
 	Bitboard moveMask = bb(src) | bb(dst);
+	PieceType pt = pieceTypeOf(srcPiece);
+	Color c = colorOf(srcPiece);
 
-	m_colorBBs[colorOf(srcPiece)] ^= moveMask;
-	m_typeBBs[pieceTypeOf(srcPiece)] ^= moveMask;
-
-	m_pieces[src] = NonePiece;
-	m_pieces[dst] = srcPiece;
+	m_colorBBs[c] ^= moveMask;
+	m_typeBBs[pt] ^= moveMask;
+	m_pieces[src]  = NonePiece;
+	m_pieces[dst]  = srcPiece;
 }
 
 inline void Position::placePiece(Square s, Piece piece) 
@@ -242,21 +256,12 @@ inline void Position::placePiece(Square s, Piece piece)
 	ASSERT(m_pieces[s] == NonePiece);
 
 	PieceType pt = pieceTypeOf(piece);
-
-	// update PSQT
-	int entry = Evaluation::PSQT[piece][s];
-	m_mgPSQT += Evaluation::mg(entry);
-	m_egPSQT += Evaluation::eg(entry);
-
-	// update game phase and material
-	m_phase += Evaluation::PiecePhaseValue[pt];
-	m_material += Evaluation::PieceValue[piece];
-
-	// place Piece
+	Color c = colorOf(piece);
 	Bitboard mask = bb(s);
-	m_colorBBs[colorOf(piece)] |= mask;
+
+	m_colorBBs[c] |= mask;
 	m_typeBBs[pt] |= mask;
-	m_pieces[s] = piece;
+	m_pieces[s]	= piece;
 }
 
 inline void Position::removePiece(Square s, Piece piece) 
@@ -265,19 +270,10 @@ inline void Position::removePiece(Square s, Piece piece)
 	ASSERT(m_pieces[s] == piece);
 
 	PieceType pt = pieceTypeOf(piece);
-
-	// update PSQT
-	int entry = Evaluation::PSQT[piece][s];
-	m_mgPSQT -= Evaluation::mg(entry);
-	m_egPSQT -= Evaluation::eg(entry);
-
-	// update game phase and material
-	m_phase -= Evaluation::PiecePhaseValue[pt];
-	m_material -= Evaluation::PieceValue[piece];
-
-	// remove piece
+	Color c = colorOf(piece);
 	Bitboard mask = bb(s);
-	m_colorBBs[colorOf(piece)] ^= mask;
+
+	m_colorBBs[c] ^= mask;
 	m_typeBBs[pt] ^= mask;
 	m_pieces[s] = NonePiece;
 }

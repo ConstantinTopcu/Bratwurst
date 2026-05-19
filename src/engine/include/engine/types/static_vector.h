@@ -97,28 +97,28 @@ namespace Bratwurst
     template<typename T, size_t N>
     inline constexpr T& StaticVector<T, N>::get(size_t i)
     {
-        ASSERT_MSG(i < m_size && i > 0, "index out of bounds!");
+        ASSERT_MSG(i < m_size, "index out of bounds!");
         return m_data[i];
     }
 
     template<typename T, size_t N>
     constexpr const T& StaticVector<T, N>::get(size_t i) const
     {
-        ASSERT_MSG(i < m_size && i > 0, "index out of bounds!");
+        ASSERT_MSG(i < m_size, "index out of bounds!");
         return m_data[i];
     }
 
     template<typename T, size_t N>
     constexpr T& StaticVector<T, N>::operator[](size_t i)
     {
-        ASSERT_MSG(i < m_size && i > 0, "index out of bounds!");
+        ASSERT_MSG(i < m_size, "index out of bounds!");
         return get(i);
     }
 
     template<typename T, size_t N>
     constexpr const T& StaticVector<T, N>::operator[](size_t i) const
     {
-        ASSERT_MSG(i < m_size && i > 0, "index out of bounds!");
+        ASSERT_MSG(i < m_size, "index out of bounds!");
         return get(i);
     }
 
