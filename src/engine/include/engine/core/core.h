@@ -64,7 +64,7 @@
 #define ASSERT_MSG(expr, msg) ((void)0)
 #endif
 
-#define DISABLE_PAWN_HASH 1
+//#define DISABLE_PAWN_HASH 0
 
 namespace Bratwurst
 {

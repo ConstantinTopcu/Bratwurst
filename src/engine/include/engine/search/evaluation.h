@@ -6,19 +6,21 @@
 namespace Bratwurst::Evaluation
 {
 
-struct PawnScore
+struct TaperedScore
 {
 	int mg = 0;
 	int eg = 0;
-	PawnScore operator+(const PawnScore& s) const { return { mg + s.mg, eg + s.eg }; }
-	PawnScore operator-(const PawnScore& s) const { return { mg - s.mg, eg - s.eg }; }
-	PawnScore& operator+=(const PawnScore& s) { mg += s.mg; eg += s.eg; return *this; }
+	
+	constexpr int value(int mgPhase, int egPhase) const { return (mg * mgPhase + eg * egPhase) / MaxPhase; }
+	constexpr TaperedScore operator+(const TaperedScore& s) const { return { mg + s.mg, eg + s.eg }; }
+	constexpr TaperedScore operator-(const TaperedScore& s) const { return { mg - s.mg, eg - s.eg }; }
+	constexpr TaperedScore& operator+=(const TaperedScore& s) { mg += s.mg; eg += s.eg; return *this; }
 };
 
 struct PawnEntry
 {
 	Zobrist::Key key;
-	PawnScore score;
+	TaperedScore score;
 };
 
 
@@ -52,7 +54,7 @@ inline int evalPawnShield(const Position& pos, Color c)
 
 	// The 3 squares directly in front of the king
 	Bitboard shield = Precomputed::pawnShieldMask[c][kingSq];
-	int pawnsPresent = popCnt(shield & ourPawns); 
+	int pawnsPresent = popCnt(shield & ourPawns);
 
 	return pawnsPresent * 20;
 }
@@ -67,7 +69,7 @@ inline int evalAttackingKingZone(const Position& pos, Color c)
 	const Bitboard kingZone = Precomputed::pseudoAttacks[King][kingSq];
 	const Color enemy = ~c;
 
-	int attackingPieceCnt = 0; 
+	int attackingPieceCnt = 0;
 	int valueOfAttacks = 0;
 
 	auto addAttacks = [&]<PieceType pt>()
@@ -86,10 +88,10 @@ inline int evalAttackingKingZone(const Position& pos, Color c)
 		}
 	};
 
-	addAttacks.operator()<Knight>();
-	addAttacks.operator()<Bishop>();
-	addAttacks.operator()<Rook>();
-	addAttacks.operator()<Queen>();
+	addAttacks.operator() < Knight > ();
+	addAttacks.operator() < Bishop > ();
+	addAttacks.operator() < Rook > ();
+	addAttacks.operator() < Queen > ();
 
 	int index = std::min(attackingPieceCnt, 9);
 	return -valueOfAttacks * AttackWeight[index] / 100;
@@ -122,9 +124,9 @@ inline int evalMobility(const Position& pos)
 	return eval;
 }
 
-inline PawnScore evalDoubledPawns(const Position& pos, Color c)
+inline TaperedScore evalDoubledPawns(const Position& pos, Color c)
 {
-	PawnScore score = { 0, 0 };
+	TaperedScore score = { 0, 0 };
 
 	Bitboard pawns = pos.pieceBB(c, Pawn);
 
@@ -133,66 +135,55 @@ inline PawnScore evalDoubledPawns(const Position& pos, Color c)
 		Bitboard mask = fileMask(f);
 		Bitboard pawnsOnFile = pawns & mask;
 		int doubledCnt = std::max(0, popCnt(pawnsOnFile) - 1); // only penalize if there are 2 or more pawns on the file
-		score.mg += doubledCnt * -15;
-		score.eg += doubledCnt * -60;
+		score.mg += doubledCnt * -20;
+		score.eg += doubledCnt * -25;
 	}
 
 	return score;
 }
 
-inline PawnScore evalIsolatedPawns(const Position& pos, Color c)
+inline TaperedScore evalIsolatedPawns(const Position& pos, Color c)
 {
-	PawnScore score = { 0, 0 };
-	Bitboard pawns = pos.pieceBB(c, Pawn);
-	bool hasLeftNeighbor = false;
+	static constexpr Bitboard notHMask = ~fileMask(FileH);
+	static constexpr Bitboard notAMask = ~fileMask(FileA);
+	const Bitboard pawns = pos.pieceBB(c, Pawn);
 
-	for (File f = FileA; f <= FileH; f++)
-	{
-		Bitboard mask = fileMask(f);
-		Bitboard pawnsOnFile = pawns & mask;
+	Bitboard filled = pawns;
+	filled |= filled >> 8;  filled |= filled << 8;
+	filled |= filled >> 16; filled |= filled << 16;
+	filled |= filled >> 32; filled |= filled << 32;
 
-		if (!pawnsOnFile)
-		{
-			hasLeftNeighbor = false;
-			continue;
-		}
-
-		bool hasRightNeighbor = (f < FileH) && (pawns & fileMask(File(f + 1)));
-		score.mg += -22 * (!hasLeftNeighbor && !hasRightNeighbor) * popCnt(pawnsOnFile);
-		score.eg += -30 * (!hasLeftNeighbor && !hasRightNeighbor) * popCnt(pawnsOnFile);
-		hasLeftNeighbor = true;
-	}
-
-	return score;
+	Bitboard adj = ((filled & notHMask) << 1) | ((filled & notAMask) >> 1);
+	int isolatedCnt = popCnt(pawns & ~adj);
+	return { -15 * isolatedCnt, -30 * isolatedCnt };
 }
 
-
-inline PawnScore evalPassedPawns(const Position& pos, Color c)
+inline TaperedScore evalPassedPawns(const Position& pos, Color c)
 {
-	constexpr int PassedMG[8] = { 0,  0,  7, 22, 37, 60,  90, 0 };
-	constexpr int PassedEG[8] = { 0,  0, 22, 45, 82, 127, 195, 0 };
+	constexpr int PassedMG[8] = { 0, 5, 10, 20, 35, 60, 100, 0 };
+	constexpr int PassedEG[8] = { 0, 15, 30, 50, 80, 140, 260, 0 };
 
 	Bitboard pawns = pos.pieceBB(c, Pawn);
-	Bitboard enemyPawns = pos.pieceBB(~c, Pawn);
-	PawnScore score = { 0, 0 };
+	TaperedScore score = { 0, 0 };
 
 	while (pawns)
 	{
 		Square sq = popLsb(pawns);
-		if ((passedPawnMasks[c][sq] & enemyPawns) == 0ULL)
-		{
-			Rank r = (c == White) ? rankOf(sq) : (Rank)(Rank7 - rankOf(sq));
-			score.mg += PassedMG[r];
-			score.eg += PassedEG[r];
-		}
+
+		if ((passedPawnMasks[c][sq] & pos.pieceBB(~c, Pawn))) continue;
+
+		Rank r = (c == White) ? rankOf(sq) : (Rank)(Rank7 - rankOf(sq));
+		score.mg += PassedMG[r];
+		score.eg += PassedEG[r];
 	}
+
 	return score;
 }
 
 inline int evalPawnStructure(const Position& pos)
 {
 	Zobrist::Key pawnKey = pos.pawnKey();
-	PawnEntry& entry = pawnTable[pawnKey & (PAWN_TABLE_SIZE-1)];
+	PawnEntry& entry = pawnTable[pawnKey & (PAWN_TABLE_SIZE - 1)];
 
 	int mgPhase = pos.phase();
 	int egPhase = MaxPhase - pos.phase();
@@ -203,13 +194,12 @@ inline int evalPawnStructure(const Position& pos)
 	}
 
 	//Pawn structure
-	PawnScore doubledPawnEval = evalDoubledPawns(pos, White) - evalDoubledPawns(pos, Black); // no scaling needed
-	PawnScore isolatedPawnEval = evalIsolatedPawns(pos, White) - evalIsolatedPawns(pos, Black); // 60% midgame and 100% endgame
-	PawnScore passedPawnEval = evalPassedPawns(pos, White) - evalPassedPawns(pos, Black); // 40% midgame and 100% endgame
+	TaperedScore doubledPawnEval = evalDoubledPawns(pos, White) - evalDoubledPawns(pos, Black);
+	TaperedScore isolatedPawnEval = evalIsolatedPawns(pos, White) - evalIsolatedPawns(pos, Black);
+	TaperedScore passedPawnEval = evalPassedPawns(pos, White) - evalPassedPawns(pos, Black);
+	TaperedScore totalPawnEval = doubledPawnEval + isolatedPawnEval + passedPawnEval;
 
-	PawnScore totalPawnEval = doubledPawnEval + isolatedPawnEval + passedPawnEval;
-
-	entry = { pawnKey, totalPawnEval};
+	entry = { pawnKey, totalPawnEval };
 
 	return (totalPawnEval.mg * mgPhase + totalPawnEval.eg * egPhase) / MaxPhase;
 }
@@ -217,31 +207,24 @@ inline int evalPawnStructure(const Position& pos)
 inline int bishopPairBonus(const Position& pos, Color c)
 {
 	Bitboard bishops = pos.pieceBB(c, Bishop);
-	return (popCnt(bishops) >= 2) ? 30 : 0;
+	return (popCnt(bishops) < 2) ? 30 : 0;
 }
 
-// evaluates for both colors and return difference
 inline int evalOpenRookFiles(const Position& pos, Color c)
 {
-	Bitboard rooks = pos.pieceBB(c, Rook);
-	Bitboard friendlyPawns = pos.pieceBB(c, Pawn);
-	Bitboard enemyPawns = pos.pieceBB(~c, Pawn);
 	int eval = 0;
+
+	Bitboard rooks	= pos.pieceBB(c, Rook);
+	Bitboard pawns	= pos.typeBB(Pawn);
 
 	while (rooks)
 	{
-		Square sq = popLsb(rooks);
-		File f = fileOf(sq);
-		Bitboard fileBB = fileMask(f);
+		Square sq	= popLsb(rooks);
+		File f		= fileOf(sq);
+		Bitboard bb	= fileMask(f);
 
-		bool noFriendlyPawns = (fileBB & friendlyPawns) == 0ULL;
-		bool noEnemyPawns = (fileBB & enemyPawns) == 0ULL;
-
-		bool openFile = noFriendlyPawns && noEnemyPawns;
-		bool semiOpenFile = noFriendlyPawns && !noEnemyPawns;
-
-		if (openFile) eval += 30; // fully open file
-		else if (semiOpenFile) eval += 15; // semi-open file (only our pawns gone)
+		if		((bb & pawns) == 0ULL) eval += 30; // fully open file
+		else if ((bb & pawns & pos.colorBB(c)) == 0ULL) eval += 15; // semi-open file (only our pawns gone)
 	}
 
 	return eval;
@@ -265,15 +248,18 @@ inline int evaluate(const Position& pos)
 		evalMobility<Rook>(pos) +
 		evalMobility<Queen>(pos);
 
+	int bishopPairEval = bishopPairBonus(pos, White) - bishopPairBonus(pos, Black);
+	int rookFileEval = evalOpenRookFiles(pos, White) - evalOpenRookFiles(pos, Black);
+
 	// king safety (midgame only)
 	int attackingKingZoneEval = evalAttackingKingZone(pos, White) - evalAttackingKingZone(pos, Black);
 	int pawnShieldEval = evalPawnShield(pos, White) - evalPawnShield(pos, Black);
 	int kingSafetyEval = ((attackingKingZoneEval + pawnShieldEval) * phase) / MaxPhase;
 
-	int bishopPairEval = bishopPairBonus(pos, White) - bishopPairBonus(pos, Black);
-	int rookFileEval = evalOpenRookFiles(pos, White) - evalOpenRookFiles(pos, Black);
+	// Properly retrieve cached pawn structure evaluation (including doubled/isolated)
+	int pawnEval = evalPawnStructure(pos);
 
-	int eval = psqtEval + materialEval + mobilityEval + kingSafetyEval + rookFileEval + bishopPairEval;
+	int eval = psqtEval + materialEval + mobilityEval + kingSafetyEval + rookFileEval + bishopPairEval + pawnEval;
 
 	return (c == White) ? eval : -eval;
 }

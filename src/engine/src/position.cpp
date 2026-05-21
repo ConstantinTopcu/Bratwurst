@@ -370,7 +370,7 @@ void Position::doMove(Move move)
         newSt.egPSQT += Evaluation::eg(dstEntry) - Evaluation::eg(srcEntry);
 
 #ifndef DISABLE_PAWN_HASH
-        if (srcType == Pawn) newSt.pawnKey ^= Zobrist::piece[srcPiece][src] | Zobrist::piece[srcPiece][dst];
+        if (srcType == Pawn) newSt.pawnKey ^= Zobrist::piece[srcPiece][src] ^ Zobrist::piece[srcPiece][dst];
 #endif
 
         movePiece(src, dst, srcPiece);

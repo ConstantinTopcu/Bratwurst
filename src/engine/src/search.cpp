@@ -272,11 +272,12 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 		return quiescence(pos, alpha, beta, ply + 1, ply + MaxQuiescenceDepth, searchInfo);
 
 	bool nullMoveAllowed = pos.stateInfo().prevMove != Move::Null();
+	//int nonPawnMaterial = pos.material(c) - popCnt(pos.pieceBB(c, Pawn)) * Evaluation::PieceValue[Pawn];
 
 	// Null Move Pruning (https://www.chessprogramming.org/Null_Move_Pruning):
 	// if you skip your turn and you still fail high, then this position is too good for you 
 	// and the opponent won't let you reach it, so you can safely prune it
-	if (nullMoveAllowed && phase >= 2 && !isCheck && remainingDepth > 3)
+	if (nullMoveAllowed && !isCheck && remainingDepth > 3)
 	{
 		int reduction = 3 + remainingDepth / 6;
 		int NMPDepth = std::max(ply + 1, maxDepth - reduction);
@@ -330,9 +331,12 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 	while (picker.hasNext())
 	{
 		Move move = picker.pick();
+		Square src = move.src();
+		Square dst = move.dst();
 
-		Piece movingPiece = pos.pieceOn(move.src());
-		Piece capturedPiece = pos.pieceOn(move.dst());
+		Piece piece = pos.pieceOn(src);
+		PieceType pt = pieceTypeOf(piece);
+		Piece capturedPiece = pos.pieceOn(dst);
 		bool isCapture = capturedPiece != NonePiece || move.enPassant();
 
 		pos.doMove(move);
@@ -384,7 +388,10 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 		else
 		{
 			// check extensions
-			int extension = isCheck ? 1 : 0;
+			int extension = 0;
+
+			extension += isCheck ? 1 : 0;
+
 			eval = -negamax(pos, -beta, -alpha, ply + 1, maxDepth + extension, searchInfo);
 		}
 

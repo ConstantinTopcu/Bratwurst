@@ -90,6 +90,7 @@ public:
 	[[nodiscard]] inline Zobrist::Key pawnKey() const { return stateInfo().pawnKey; }
 
 	[[nodiscard]] inline int material() const { return stateInfo().material[White] - stateInfo().material[Black]; }
+	[[nodiscard]] inline int material(Color c) const { return stateInfo().material[c]; }
 	[[nodiscard]] inline int egPSQT() const { return stateInfo().egPSQT; }
 	[[nodiscard]] inline int mgPSQT() const { return stateInfo().mgPSQT; }
 	[[nodiscard]] inline int phase() const { return std::min<int>(stateInfo().phase, Evaluation::MaxPhase); }
