@@ -431,17 +431,32 @@ int negamax(Position& pos, int alpha, int beta, int ply, int maxDepth, SearchInf
 	return alpha;
 }
 
-SearchResult search(Position& pos, int timeMs)
+SearchResult search(Position& pos, TimeLimit limit)
 {
 	TT.startNewSearch();
 	ageKillerMoves();
 	ageHistory();
 
+	int time = 0;
+
+	// calculate remaining time
+	if (limit.msPerMove > 0)
+	{
+		time = limit.msPerMove;
+	}
+
+	else
+	{
+		// Never spend more than 25% of remaining time
+		time = limit.msLeft / 25 + limit.msIncr * 3 / 4;
+		time = std::min(time, limit.msLeft / 4);
+	}
+
 	SearchInfo searchInfo =
 	{
 		.start = Clock::now(),
 		.stopped = false,
-		.timeMS = timeMs,
+		.timeMS = time,
 		.nodes = 0
 	};
 

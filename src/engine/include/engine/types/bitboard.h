@@ -97,6 +97,11 @@ inline bool exactlyOne(Bitboard b)
 	return b && (b & (b - 1)) == 0ULL;
 }
 
+inline bool moreThanOne(Bitboard b)
+{
+	return b && (b & (b - 1)) != 0ULL;
+}
+
 template<Direction d>
 constexpr Bitboard shift(Bitboard b)
 {

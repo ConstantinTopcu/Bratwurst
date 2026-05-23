@@ -207,7 +207,7 @@ inline int evalPawnStructure(const Position& pos)
 inline int bishopPairBonus(const Position& pos, Color c)
 {
 	Bitboard bishops = pos.pieceBB(c, Bishop);
-	return (popCnt(bishops) < 2) ? 30 : 0;
+	return moreThanOne(bishops) ? 30 : 0;
 }
 
 inline int evalOpenRookFiles(const Position& pos, Color c)

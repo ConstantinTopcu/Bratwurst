@@ -17,17 +17,6 @@ namespace Bratwurst::UCI
 
 	static Position pos;
 
-	static void debugPosition()
-	{
-		std::cout << "info string castling_rights:"
-			<< " wK=" << pos.hasCastlingRight(WhiteOO)
-			<< " wQ=" << pos.hasCastlingRight(WhiteOOO)
-			<< " bK=" << pos.hasCastlingRight(BlackOO)
-			<< " bQ=" << pos.hasCastlingRight(BlackOOO)
-			<< "\n";
-		std::cout.flush();
-	}
-
 	static std::vector<std::string> split(const std::string& line)
 	{
 		std::istringstream ss(line);
@@ -68,19 +57,18 @@ namespace Bratwurst::UCI
 
 	static void go(const std::vector<std::string>& tokens)
 	{
-		int movetime = -1;
 		int perftDepth = -1;
-		int wtime = -1, btime = -1;
-		int winc = 0, binc = 0;
+		Search::TimeLimit time = { 0, 0, 0};
+		Color c = pos.colorToMove();
 
 		for (size_t i = 1; i < tokens.size(); i++)
 		{
-			if (tokens[i] == "perft" && i + 1 < tokens.size()) perftDepth = std::stoi(tokens[++i]);
-			else if (tokens[i] == "movetime" && i + 1 < tokens.size()) movetime = std::stoi(tokens[++i]);
-			else if (tokens[i] == "wtime" && i + 1 < tokens.size())    wtime = std::stoi(tokens[++i]);
-			else if (tokens[i] == "btime" && i + 1 < tokens.size())    btime = std::stoi(tokens[++i]);
-			else if (tokens[i] == "winc" && i + 1 < tokens.size())     winc = std::stoi(tokens[++i]);
-			else if (tokens[i] == "binc" && i + 1 < tokens.size())     binc = std::stoi(tokens[++i]);
+			if		(tokens[i] == "perft" && i + 1 < tokens.size())					perftDepth = std::stoi(tokens[++i]);
+			else if (tokens[i] == "movetime" && i + 1 < tokens.size())				time.msPerMove = std::stoi(tokens[++i]);
+			else if (tokens[i] == "wtime" && i + 1 < tokens.size() && c == White)	time.msLeft = std::stoi(tokens[++i]);
+			else if (tokens[i] == "btime" && i + 1 < tokens.size() && c == Black)   time.msLeft = std::stoi(tokens[++i]);
+			else if (tokens[i] == "winc" && i + 1 < tokens.size() && c == White)    time.msIncr = std::stoi(tokens[++i]);
+			else if (tokens[i] == "binc" && i + 1 < tokens.size() && c == Black)    time.msIncr = std::stoi(tokens[++i]);
 		}
 
 		if (perftDepth >= 0)
@@ -90,16 +78,7 @@ namespace Bratwurst::UCI
 			return;
 		}
 
-		if (movetime == -1)
-		{
-			int time = (pos.colorToMove() == White) ? wtime : btime;
-			int inc = (pos.colorToMove() == White) ? winc : binc;
-			movetime = time / 20 + inc; // naive time management
-		}
-
-		debugPosition();
-
-		auto result = Search::search(pos, movetime);
+		auto result = Search::search(pos, time);
 		std::cout << "bestmove " << result.bestMove.toString() << "\n";
 	}
 

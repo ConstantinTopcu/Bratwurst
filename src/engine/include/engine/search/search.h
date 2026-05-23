@@ -13,6 +13,13 @@ struct SearchResult
 	int depth; // the last depth level, that was fully searched
 };
 
-SearchResult search(Position& position, int depth);
+struct TimeLimit
+{
+	int msLeft;
+	int msIncr;
+	int msPerMove;
+};
+
+SearchResult search(Position& position, TimeLimit limit);
 
 }
